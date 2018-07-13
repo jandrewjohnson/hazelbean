@@ -10,9 +10,10 @@ include_package_data=True
 setup(
   name = 'hazelbean',
   packages = packages,
-  version = '0.6.6',
+  version = '0.6.7',
   description = 'Geospatial research tools',
   long_description=long_description,
+  long_description_content_type="text/markdown",
   author = 'Justin Andrew Johnson',
   url = 'https://github.com/jandrewjohnson/hazelbean',
   download_url = 'https://github.com/jandrewjohnson/hazelbean',

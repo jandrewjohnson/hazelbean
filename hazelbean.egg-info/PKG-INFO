@@ -1,10 +1,9 @@
-Metadata-Version: 1.1
+Metadata-Version: 2.1
 Name: hazelbean
-Version: 0.6.6
+Version: 0.6.7
 Summary: Geospatial research tools
 Home-page: https://github.com/jandrewjohnson/hazelbean
 Author: Justin Andrew Johnson
-Author-email: UNKNOWN
 License: UNKNOWN
 Download-URL: https://github.com/jandrewjohnson/hazelbean
 Description: # Hazelbean
@@ -31,3 +30,4 @@ Description: # Hazelbean
 Keywords: geospatial,raster,shapefile,sustainability science
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
+Description-Content-Type: text/markdown
