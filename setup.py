@@ -10,7 +10,7 @@ include_package_data=True
 setup(
   name = 'hazelbean',
   packages = packages,
-  version = '0.6.7',
+  version = '0.6.8',
   description = 'Geospatial research tools',
   long_description=long_description,
   long_description_content_type="text/markdown",

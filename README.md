@@ -17,4 +17,4 @@ And then finally,
 - Install hazelbean with "pip install hazelbean"
 
 ## More information
-See the author's personal webpage, https://jandrewjohnson.com for more details about the underlying research.
+See the author's personal webpage, https://justinandrewjohnson.com/ for more details about the underlying research.
