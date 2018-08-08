@@ -12,6 +12,9 @@ import logging
 
 L = hb.get_logger('hazelbean utils')
 
+def hprint(*args, **kwargs):
+    return hb_pprint(*args, **kwargs)
+
 def pp(*args, **kwargs):
     return hb_pprint(*args, **kwargs)
 
@@ -40,7 +43,9 @@ def hb_pprint(*args, **kwargs):
                     item = '\'' + v + '\''
                 else:
                     item = str(v)
-                line += '    \'' + str(k) + '\': ' + item + ',\n'
+                line += '    ' + str(k) + ': ' + item + ',\n'
+                # PREVIOS ATTEMPT Not sure why was designed this way.
+                # line += '    \'' + str(k) + '\': ' + item + ',\n'
         elif type(args[i]) is dict:
             line = 'dict\n'
             for k, v in args[i].items():
@@ -48,7 +53,7 @@ def hb_pprint(*args, **kwargs):
                     item = '\'' + v + '\''
                 else:
                     item = str(v)
-                line += '    \'' + str(k) + '\': ' + item + ',\n'
+                line += '    ' + str(k) + ': ' + item + ',\n'
         elif type(args[i]) is list:
             line = 'list\n'
             line += pprint.pformat(args[i], indent=indent, width=width, depth=depth)

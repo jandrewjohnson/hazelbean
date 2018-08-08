@@ -12,7 +12,7 @@ import hazelbean as hb
 import zipfile
 from collections import OrderedDict
 import warnings
-
+import stat
 L = hb.get_logger()
 
 def make_run_dir(base_folder=hb.config.TEMPORARY_DIR, run_name='', just_return_string=False):
@@ -633,6 +633,33 @@ def get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=None
     to_return = '_'.join(to_return)
     return to_return
 
+
+def walklevel(some_dir, level=1):
+    some_dir = some_dir.rstrip(os.path.sep)
+    assert os.path.isdir(some_dir)
+    num_sep = some_dir.count(os.path.sep)
+    for root, dirs, files in os.walk(some_dir):
+        yield root, dirs, files
+        num_sep_this = root.count(os.path.sep)
+        if num_sep + level <= num_sep_this:
+            del dirs[:]
+
+def list_filtered_dirs_recursively(input_dir, include_strings=None, depth=9999):
+    if not include_strings:
+        include_strings = []
+    output_dirs = []
+
+    for cur_dir, dirs_present, files_present in hb.walklevel(input_dir, depth):
+        for dir_ in dirs_present:
+            if len(include_strings) > 0:
+                if any(specific_string in os.path.join(cur_dir, dir_) for specific_string in include_strings):
+                    output_dirs.append(dir_)
+            else:
+                output_dirs.append(dir_)
+    return output_dirs
+
+
+
 def list_filtered_paths_nonrecursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False):
     # NOTE: the filter strings can be anywhere in the path, not just the filename.
 
@@ -713,10 +740,49 @@ def list_filtered_paths_nonrecursively(input_folder, include_strings=None, inclu
                     files.append(os.path.join(current_folder, filename))
     return files
 
+def get_pre_timestamp_file_root(input_path):
+    file_root = hb.explode_path(input_path)['file_root']
+    split = file_root.split('_')
+
+    result = list(range(len(split)))
+
+    for c, i in enumerate(split):
+        try:
+            int(i)
+            result[c] = i
+        except:
+            if len(i) == 6:
+                try:
+                    int(i[0:3])
+                    result[c] = i
+                except:
+                    result[c] = False
+            else:
+                result[c] = False
+    final_result = []
+    if result[-3] is not False:
+        if 18000101 < int(result[-3]) < 30180101:
+            final_result.append(True)
+    if result[-2] is not False:
+        if 0 <= int(result[-2]) <= 245999:
+            final_result.append(True)
+    if result[-1] is not False:
+        if 0 <= int(result[-1][0:3]) <= 999:
+            final_result.append(True)
+    if False in set(final_result):
+        raise NameError('get_pre_timestamp_file_root faile on input_path: ' + str(input_path) + ', possibly because the path wasnt formatted in the expected timestamp way.')
+
+    return split[0: -3]
 
 
-def list_filtered_paths_recursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False, depth=50):
+
+
+
+
+def list_filtered_paths_recursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False, depth=50, only_most_recent=False):
     # NOTE: the filter strings can be anywhere in the path, not just the filename.
+
+    """If only_most_recent is True, will analyze time stampes and only return similar-named files with the most recent."""
 
     # Convert filters to lists
     if include_strings is None:
@@ -746,7 +812,6 @@ def list_filtered_paths_recursively(input_folder, include_strings=None, include_
         exclude_extensions = [exclude_extensions]
     elif type(exclude_extensions) != list:
         raise TypeError('Must be string or list.')
-
     iteration_count = 0
     files = []
     for current_folder, folders_present, files_present in os.walk(input_folder):
@@ -790,6 +855,15 @@ def list_filtered_paths_recursively(input_folder, include_strings=None, include_
                     files.append(filename)
                 else:
                     files.append(os.path.join(current_folder, filename))
+
+            if only_most_recent is True:
+                final_files = []
+                for file in files:
+                    input_dir = os.path.split(file)[0]
+                    pre_timestamp_string = hb.get_pre_timestamp_file_root(file)
+                    most_recent = get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=pre_timestamp_string, include_extensions=None)
+                    final_files.append(most_recent)
+                files = final_files
     return files
 # Example Usage
 # input_folder = 'G:\\IONE-Old\\NATCAP\\bulk_data\\worldclim\\baseline\\30s'
@@ -1096,6 +1170,33 @@ def remove_uri_at_exit(input):
         hb.config.uris_to_delete_at_exit.append(input.uri)
 
 
+def remove_path(path):
+    if os.path.isdir(path):
+        for root, dirs, files in os.walk(path, topdown=False):
+            for name in files:
+                filename = os.path.join(root, name)
+                os.chmod(filename, stat.S_IWRITE)
+                os.remove(filename)
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(path)
+    else:
+        os.remove(path)
+
+        # if os.path.isdir(path):
+    #     shutil.rmtree(path, ignore_errors=True)
+    # else:
+    #     shutil.remove
+
+    # if os.path.isdir(path):
+    #     os.rmdir(path)
+    # else:
+    #     os.remove(path)
+    # try:
+    #     os.remove(path)
+    # except:
+    #     'Probably just didnt exist.'
+
 def remove_at_exit(uri):
     hb.config.uris_to_delete_at_exit.append(uri)
 
@@ -1104,12 +1205,15 @@ if __name__=='__main__':
     input_folder = 'C:\\OneDrive\\Projects\\numdal\\natcap'
     # execute_2to3_on_folder(input_folder, do_write=True)
 
+def path_rename_change_dir(input_path, new_dir):
+    """Change the directory of a file given its input path, preserving the name. NOTE does not do anything to the file"""
+    return os.path.join(new_dir, os.path.split(input_path)[1])
 
 def copy_shutil_flex(src, dst, copy_tree=True):
     """Helper util that allows copying of files or dirs in same function"""
     if os.path.isdir(src):
         if not os.path.exists(dst):
-            os.makedirs(dst)
+            hb.create_directories(dst)
         if copy_tree:
             copy_shutil_copytree(src, dst)
         else:

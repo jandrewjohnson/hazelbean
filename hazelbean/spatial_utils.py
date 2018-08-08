@@ -20,6 +20,8 @@ except:
 
 numpy = np
 L = hb.get_logger('hb spatial_utils')
+from mpl_toolkits.basemap import Basemap
+import matplotlib.pyplot as plt
 
 import hazelbean as hb
 
@@ -79,6 +81,7 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
         unique_ids, sums, counts = hb.zonal_stats_32bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
     elif values_dtype == 7:
         # Concurrency problem here? One solution: put pauses before and after cython calls? that seems horrible.
+        print (zones_array, values_array, zones_ndv, values_ndv)
         unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
     else:
         raise TypeError('data type of values not understood.')
@@ -148,8 +151,8 @@ def create_gdal_virtual_raster_using_file(file_paths_list, output_tif_path, exte
     os.system(gdal_command)
 
     if remove_generator_files:
-        hb.remove_at_exit(virt_file_list_txt_path)
-        hb.remove_at_exit(temporary_virt_filename)
+        hb.remove_path(virt_file_list_txt_path)
+        hb.remove_path(temporary_virt_filename)
 
 
 
@@ -247,6 +250,9 @@ def clip_raster_by_vector(input_path, output_path, clip_vector_path, resample_me
         base_raster_path_band_list, apply_mask, output_path,
         output_data_type, nodata_target)
 
+    hb.remove_path(mask_temp_path)
+    hb.remove_path(clip_temp_path)
+
 
 
 def clip_while_aligning_to_coarser(input_path, output_path, clip_vector_path, coarser_path, resample_method='nearest',
@@ -292,14 +298,22 @@ def clip_while_aligning_to_coarser(input_path, output_path, clip_vector_path, co
         base_raster_path_band_list, apply_mask, output_path,
         output_data_type, nodata_target)
 
+    hb.remove_path(clip_temp_path1)
+    hb.remove_path(clip_temp_path2)
+    hb.remove_path(mask_temp_path)
+
 def warp_raster_to_match(input_path, output_path, match_path, resample_method, target_bb=None, target_sr_wkt=None, gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS):
 
     target_pixel_size = hb.get_cell_size_from_uri(match_path)
+    target_pixel_size  = (target_pixel_size, -target_pixel_size)
     target_bb = hb.get_raster_info(match_path)['bounding_box']
     target_sr_wkt = hb.get_raster_info(match_path)['projection']
     hb.warp_raster(input_path, target_pixel_size, output_path,
             resample_method, target_bb=target_bb, target_sr_wkt=target_sr_wkt,
             gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS)
+
+
+
 
 def save_array_as_npy(array, output_uri):
     np.save(output_uri, array)
@@ -406,7 +420,7 @@ def read_3d_npy_chunk(input_path, d1_index, d2_index, d3_start, d3_end):
 
 
 def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match=None, band_to_match=None,
-                          optimize_data_type=True, data_type_override=None, no_data_value_override=None,
+                          optimize_data_type=True, data_type=None, ndv=None, data_type_override=None, no_data_value_override=None,
                           geotransform_override=None, projection_override=None, n_cols_override=None,
                           n_rows_override=None, compress=False, compression_method=None,
                           verbose=None, set_inf_to_no_data_value=False,
@@ -423,7 +437,7 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
     geotransform = None
     projection = None
     data_type = None
-    no_data_value = None
+    ndv = None
 
     if geotiff_uri_to_match != None:
         ds_to_match = gdal.Open(geotiff_uri_to_match)
@@ -433,51 +447,27 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
     if ds_to_match and band_to_match:
         n_cols = ds_to_match.RasterXSize
         n_rows = ds_to_match.RasterYSize
-        data_type = band_to_match.DataType
-        no_data_value = band_to_match.GetNoDataValue()
+        match_data_type = band_to_match.DataType
+        match_ndv = band_to_match.GetNoDataValue()
         geotransform = ds_to_match.GetGeoTransform()
         projection = ds_to_match.GetProjection()
 
-    # Determine optimal data type and no_data_value. Note that it is best to calculate this anew to avoid inheriting a
-    # too-small data type that clips data, and thus optimize_data_type is true by default.
-    if optimize_data_type and False: # TODOO Deactivated optimize_data_type due to unexpected crashes
-        pass
-        # temp_data_type, temp_no_data_value = determine_optimal_data_type_and_no_data_value(array)
-        # if data_type_override:
-        #     if temp_data_type == data_type_override:
-        #         data_type = data_type_override
-        #     else:
-        #         warnings.warn('You specified an data_type_override but its not the same as the optimized data_type. Ensure this is correct')
-        #         data_type = data_type_override
-        # else:
-        #     data_type = temp_data_type
-        # if no_data_value_override:
-        #     if temp_no_data_value == no_data_value_override:
-        #         no_data_value = no_data_value_override
-        #     else:
-        #         warnings.warn('You specified an no_data_value_override but its not the same as the optimized no_data_value. Ensure this is correct')
-        #         no_data_value = no_data_value_override
-        # else:
-        #     no_data_value = temp_no_data_value
-    elif data_type_override is not None or no_data_value_override is not None:
-        if data_type_override is not None:
-            data_type = data_type_override
+    if data_type is None:
+        if match_data_type is not None:
+            data_type = match_data_type
         else:
-            data_type = 7  # set to largest bitsize
-        if no_data_value_override is not None:
-            no_data_value = no_data_value_override
-        else:
-            no_data_value = 9223372036854775807
+            raise NameError('data_type not given and match_data_type not understood.')
     else:
-        data_type = 6
-        no_data_value = -9999
+        raise NameError('data_type not processed correctly.')
 
-    if not data_type:
-        data_type = 7
 
-    # if hb.numpy_type_to_gdal_number[array.dtype] != data_type:
-    #     array = array.astype(hb.gdal_number_to_numpy_type[data_type])
-
+    if ndv is None:
+        if match_ndv is not None:
+            ndv = match_ndv
+        else:
+            raise NameError('ndv not given and match_data_type not understood.')
+    else:
+        raise NameError('ndv not processed correctly.')
     array = array.astype(hb.gdal_number_to_numpy_type[data_type])
 
     if geotransform_override:
@@ -560,14 +550,14 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
 
 
     if set_inf_to_no_data_value:
-        array[(array==np.inf) | (np.isneginf(array))] = no_data_value
+        array[(array==np.inf) | (np.isneginf(array))] = ndv
 
     if execute_in_python:
         driver = gdal.GetDriverByName('GTiff')
         dst_ds = driver.Create(processed_out_uri, n_cols, n_rows, 1, data_type, dst_options)
         dst_ds.SetGeoTransform(geotransform)
         dst_ds.SetProjection(projection)
-        dst_ds.GetRasterBand(1).SetNoDataValue(no_data_value)
+        dst_ds.GetRasterBand(1).SetNoDataValue(ndv)
         dst_ds.GetRasterBand(1).WriteArray(array)
     # else:
     #     command_line_gdal_translate(array, processed_out_uri, tiled=True, compression_method=compression_method)
@@ -809,6 +799,9 @@ def read_array_chunk_from_disk(array_path, chunk):
 
 def as_array(uri, return_all_parts = False, verbose = False, band_number=1): #use GDAL to laod uri. By default only returns the array"
     # Simplest function for loading a geotiff as an array. returns only the array by defauls, ignoring the DS and BAND unless return_all_parts = True.
+    if not os.path.exists(uri):
+        raise NameError('as_array failed because ' + str(uri) + ' does not exist.')
+
     ds = gdal.Open(uri)
     band = ds.GetRasterBand(band_number)
     try:

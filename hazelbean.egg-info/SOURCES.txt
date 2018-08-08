@@ -22,10 +22,16 @@ hazelbean.egg-info/SOURCES.txt
 hazelbean.egg-info/dependency_links.txt
 hazelbean.egg-info/top_level.txt
 hazelbean/calculation_core/__init__.py
+hazelbean/calculation_core/aspect_ratio_array_functions.c
+hazelbean/calculation_core/aspect_ratio_array_functions.cp36-win_amd64.pyd
+hazelbean/calculation_core/aspect_ratio_array_functions.pyx
 hazelbean/calculation_core/compile_cython_functions.py
 hazelbean/calculation_core/cython_functions.c
 hazelbean/calculation_core/cython_functions.cp36-win_amd64.pyd
 hazelbean/calculation_core/cython_functions.pyx
+hazelbean/calculation_core/cython_functions_OLD2.pyx
+hazelbean/calculation_core/cython_functions_pre_jim_backup - Copy.pyx
+hazelbean/calculation_core/cython_functions_pre_jim_backup.pyx
 hazelbean/ui/__init__.py
 hazelbean/ui/auto_ui.py
 hazelbean/ui/auto_ui_tg.py

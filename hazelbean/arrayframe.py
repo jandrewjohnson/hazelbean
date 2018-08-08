@@ -26,6 +26,8 @@ class ArrayFrame(object):
         self.size = self.num_cols * self.num_rows
 
         self.ndv = self.band.GetNoDataValue()
+
+        # TODOO Consider eliminating data_type
         self.data_type = self.band.DataType
         self.datatype = self.data_type
         self.projection = self.ds.GetProjection()
@@ -140,6 +142,7 @@ class ArrayFrame(object):
 
     def set_valid_and_ndv_masks(self):
         # For performance reasons, it is faster to set both of these at once.
+        # self._valid_mask = np.where(self.data != self.ndv) # NOTE, this method was slower
         self._valid_mask = np.where(self.data != self.ndv, 1, 0).astype(np.ubyte)
         self._ndv_mask = np.invert(self._valid_mask)
         self.num_valid = np.count_nonzero(self.valid_mask)
@@ -149,6 +152,7 @@ class ArrayFrame(object):
         L.info('Setting valid and NDV masks. ' + str(self.num_valid) + ' valid. ' + str(self.num_ndv) + ' invalid.')
 
     def set_valid_mask(self):
+        # self._valid_mask = np.where(self.data != self.ndv) # NOTE, this method was slower
         self._valid_mask = np.where(self.data != self.ndv, 1, 0).astype(np.ubyte)
         self.num_valid = np.count_nonzero(self.valid_mask)
         self.valid_mask_set = True

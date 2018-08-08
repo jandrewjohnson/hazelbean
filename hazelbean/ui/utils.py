@@ -103,7 +103,7 @@ def prepare_workspace(workspace, name, logging_level=logging.NOTSET):
                                              logging_level=logging_level):
         with sandbox_tempdir(dir=workspace):
             logging.captureWarnings(True)
-            LOGGER.info('Writing log messages to %s', logfile)
+            LOGGER.debug('Writing log messages to %s', logfile)
             start_time = time.time()
             try:
                 yield

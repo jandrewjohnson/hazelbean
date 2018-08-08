@@ -1,8 +1,8 @@
 import os, sys, warnings
 
 import hazelbean as hb
-hazelbean_working_directory = '../hazelbean'
-# hazelbean_working_directory = hb.config.HAZELBEAN_WORKING_DIRECTORY
+# hazelbean_working_directory = '../hazelbean'
+hazelbean_working_directory = hb.config.HAZELBEAN_WORKING_DIRECTORY
 """
 TO COMPILE on windows 10, need to install proper Visual Studio tools: See::
 https://stackoverflow.com/questions/29846087/microsoft-visual-c-14-0-is-required-unable-to-find-vcvarsall-bat
@@ -10,7 +10,7 @@ But basically, need to install
 "Tools for Visual Studio 2017, Build Tools for Visual Studio 2017, These Build Tools allow you to build Visual Studio projects from a command-line interface. Supported projects include: ASP.NET, Azure, C++ desktop, ClickOnce, containers, .NET Core, .NET Desktop, Node.js, Office and SharePoint, Python, TypeScript, Unit Tests, UWP, WCF, and Xamarin"."""
 
 
-CYTHON_FILES = ['compile_cython_functions.py', 'compile_geoprocessing_core.py']
+CYTHON_FILES = ['compile_cython_functions.py']
 recompile_cython = True
 if recompile_cython == True and hb.CONFIGURED_FOR_CYTHON_COMPILATION:
     if os.path.exists(hazelbean_working_directory):
@@ -18,7 +18,6 @@ if recompile_cython == True and hb.CONFIGURED_FOR_CYTHON_COMPILATION:
         old_cwd = os.getcwd()
         os.chdir(os.path.join(hazelbean_working_directory, 'calculation_core'))
         if sys.version_info[0] == 2:
-            CYTHON_FILES = [CYTHON_FILES[0]]
             python_2_exe_dir = 'C:\\Anaconda2'
             os.chdir(python_2_exe_dir)
             print('Checking if need to compile cython files for Python 2.')
@@ -32,8 +31,10 @@ if recompile_cython == True and hb.CONFIGURED_FOR_CYTHON_COMPILATION:
                     warnings.warn('Cythonization failed.')
 
         else:
-            for python_file_uri in [CYTHON_FILES[0]]:
+            # print('CYTHON_FILES', CYTHON_FILES)
+            for python_file_uri in CYTHON_FILES:
                 cython_command = "python " + python_file_uri + " --quiet build_ext -i clean"  #
+                # print('cython_command', cython_command)
                 # cython_command = "python " + python_file_uri + " --verbose build_ext -i clean"  #
                 returned = os.system(cython_command)
                 if returned:

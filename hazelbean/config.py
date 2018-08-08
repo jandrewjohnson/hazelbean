@@ -36,7 +36,7 @@ TEMPORARY_DIR = os.path.join(PRIMARY_DRIVE, 'temp')
 BASE_DATA_DIR = os.path.join(PRIMARY_DRIVE, 'onedrive', 'projects', 'base_data')
 BULK_DATA_DIR = os.path.join(PRIMARY_DRIVE, 'bulk_data')
 EXTERNAL_BULK_DATA_DIR = os.path.join(EXTERNAL_BULK_DATA_DRIVE, 'bulk_data')
-HAZELBEAN_WORKING_DIRECTORY = os.path.join(PRIMARY_DRIVE, 'OneDrive\\Projects\\hazelbean')
+HAZELBEAN_WORKING_DIRECTORY = os.path.join(PRIMARY_DRIVE, 'OneDrive\\Projects\\hazelbean\\hazelbean') # TODOO Make this based on config file?
 TEST_DATA_DIR = os.path.join(HAZELBEAN_WORKING_DIRECTORY, 'tests/data')
 PROJECTS_DIR = os.path.join(PRIMARY_DRIVE, 'OneDrive\\Projects')
 

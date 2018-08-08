@@ -89,6 +89,12 @@ if not use_strict_importing:
         IMPORT_LOGGER.debug('Unable to import cython_functions during Hazelbean init.')
 
     try:
+        import hazelbean.calculation_core.aspect_ratio_array_functions
+        from hazelbean.calculation_core.aspect_ratio_array_functions import *
+    except:
+        IMPORT_LOGGER.debug('Unable to import aspect_ratio_array_functions during Hazelbean init.')
+
+    try:
         import hazelbean.ui
         from hazelbean.ui import *
     except:
@@ -151,6 +157,9 @@ else:
 
     import hazelbean.calculation_core.cython_functions
     from hazelbean.calculation_core.cython_functions import *
+
+    import hazelbean.calculation_core.aspect_ratio_array_functions
+    from hazelbean.calculation_core.aspect_ratio_array_functions import *
 
     import hazelbean.ui
     from hazelbean.ui import *

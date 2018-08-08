@@ -15,9 +15,14 @@ L = hb.get_logger('project_flow')
 L.setLevel(logging.INFO)
 
 def run_iterator_in_parallel(p, task, iteration_counter):
+    things_returned = []
     for child in task.children:
         L.info('iter ' + str(iteration_counter) + ': Running task ' + str(child.name) + ' with iterator parent ' + child.parent.name + ' in dir ' + str(p.cur_dir))
-        p.run_task(child)
+        r = p.run_task(child)
+        things_returned.append(r)
+
+
+    return things_returned
 
 class Task(anytree.NodeMixin):
     def __init__(self, function, project, parent=None, type='task', **kwargs):
@@ -46,6 +51,10 @@ class Task(anytree.NodeMixin):
 
 class ProjectFlow(object):
     def __init__(self, project_dir=None):
+        try:
+            self.calling_script = inspect.stack()[1][1]
+        except:
+            L.debug('Could not identify a calling script.')
 
         ## PROJECT LEVEL ATTRIBUTES
         # Set the project-level logging level. Individual tasks can overwrite this.
@@ -89,14 +98,19 @@ class ProjectFlow(object):
         self.run_this = None
         self.skip_existing = None
 
+        self.task_names_defined = [] # Store a list of tasks defined somewhere in the target script. For convenience, e.g., when setting runtime conditionals based on function names existence.
+
     def __str__(self):
+        return 'Hazelbean ProjectFlow object. ' + hb.pp(self.__dict__, return_as_string=True)
+
+    def __repr__(self):
         return 'Hazelbean ProjectFlow object. ' + hb.pp(self.__dict__, return_as_string=True)
 
     def write_args_to_project(self, args):
         L.debug('write_args_to_project.')
         for k, v in args.items():
             if k in self.__dict__:
-                L.warning('Arg given to P via UI was already in P. Overwritting: ' + str(k) + ', ' + str(v) +', Original value: ' + str(self.__dict__[k]))
+                L.debug('Arg given to P via UI was already in P. Overwritting: ' + str(k) + ', ' + str(v) +', Original value: ' + str(self.__dict__[k]))
             self.__setattr__(k, v)
 
     def show_tasks(self):
@@ -107,6 +121,7 @@ class ProjectFlow(object):
                 L.info(pre + task.name + ', running: ' + str(task.run) + ', overwriting: ' + str(task.skip_existing))
 
     def add_task(self, function, project=None, parent=None, type='task', **kwargs):
+
         if not project:
             project = self
         if not parent:
@@ -116,6 +131,8 @@ class ProjectFlow(object):
                 'Fuction passed to add_task() must be callable. ' + str(function.__name__) + ' was not.')
 
         task = Task(function, self, parent=parent, type=type, **kwargs)
+
+        self.task_names_defined.append(function.__name__)
 
         # Add attribute to the parent object (the ProjectFlow object) referencing the iterator_object
         setattr(self, task.name, task)
@@ -160,7 +177,7 @@ class ProjectFlow(object):
                         task.task_dir = os.path.join(self.run_dir, task.function.__name__)
                     self.cur_dir = task.task_dir
                 elif task.parent.type == 'iterator':
-                    task.task_dir = os.path.join(task.parent.task_dir, self.cur_dir_parent_dir, task.name)
+                    task.task_dir = os.path.join(self.cur_dir_parent_dir, task.name)
                     self.cur_dir = task.task_dir
                 else:
                     raise NameError('Unknown Node type')
@@ -180,25 +197,17 @@ class ProjectFlow(object):
                     if os.path.exists(self.cur_dir):
                         self.run_this = 0
 
-
-                # HACK, I failed to understand why sometiems the dirs weren't created in time. Thus I force it here.
-                if not os.path.exists(self.cur_dir):
-                    if not os.path.exists(os.path.split(self.cur_dir)[0]):
-                        os.mkdir(os.path.split(self.cur_dir)[0])
-                    os.mkdir(self.cur_dir)
+                if not os.path.exists(self.cur_dir) and task.creates_dir:
+                    hb.create_directories(self.cur_dir)
 
                 # # NYI, but I want to implement task-level logging conditionals.
                 # L.setLevel(task.logging_level)
 
                 if task.type == 'task':
                     if self.run_this:
-
-
                         # If the task's parent is an iterator, we want to report different info, otherwise these are the same.
                         if task.parent.type == 'iterator':
-                            # Decided NOT to print this cuasae it's printed by the run_iterator_in_parallel funciton.
-                            # L.info(self.prepend + 'Running task ' + str(task.name) + ' with iterator parent ' + task.parent.name + ' in dir ' + str(self.cur_dir))
-                            task.function(self)  # Running the Task including anyting in p.run_this
+                            r = task.function(self)
                         else:
                             self.prepend = ''
                             L.info(self.prepend + 'Running task ' + str(task.name) + ' in dir ' + str(self.cur_dir))
@@ -220,7 +229,7 @@ class ProjectFlow(object):
                             task.function(self)  # Running the Task EXCLUDING anyting in p.run_this
 
                         else:
-                            L.warning('Skipping task ' + str(task.name) + ' but its task_dir does not exist at ' + str(self.cur_dir))
+                            L.debug('Skipping task ' + str(task.name) + ' but its task_dir does not exist at ' + str(self.cur_dir))
                 elif task.type == 'iterator':
                     self.prepend += '    '
                     L.info('Creating iterator ' + str(task.name))
@@ -253,9 +262,10 @@ class ProjectFlow(object):
                         assert(len(set(replacement_lengths))==1) # Check that all of the same size.
                     num_iterations = replacement_lengths[0]
 
-                    self.run_in_parallel = True # TODO Connect to UI
-                    n_workers = 6
+                    self.run_in_parallel = True # TODOO Connect to UI
+                    n_workers = 10
                     if self.run_in_parallel:
+                        # OPTIMIZATION NOTE: It's slow to spawn 460 processes when they are just going to be skipped, thus run_this for iterators needs to be improved.
                         worker_pool = multiprocessing.Pool(n_workers) # NOTE, worker pool and results are LOCAL variabes so that they aren't pickled when we pass the project object.
                     results = []
 
@@ -275,6 +285,7 @@ class ProjectFlow(object):
 
                             # We use apply_async, which immediately lets the next line calculate. It is blocked below with results.get()
                             result = worker_pool.apply_async(func=run_iterator_in_parallel, args=(project_copy, task, iteration_counter))
+
                             results.append(result)
                         else:
                             L.info('Starting task ' + str(iteration_counter) + ' ' + task.name + ' while replacing ' + str(replacement_attribute_name))
@@ -282,13 +293,33 @@ class ProjectFlow(object):
                                 self.run_task(child)
 
                     # Once all the iterations are done, iterate through the stored results and call their get functions, which blocks running past this point until all are done.
+                    # SUPER CONFUSING POINT. the project object will be modified independently by all tasks. Cant think of a good way ro rejoin them
+                    returns_from_parallel_tasks = []
                     for i in results:
-                        i.get()
+                        for j in i.get():
+                            if j is not None:
+                                returns_from_parallel_tasks.append(j)
+                    for i in returns_from_parallel_tasks:
+                        if i[1] == 'append_to_list':
+                            if isinstance(i[2], list):
+                                getattr(self, i[0]).extend(i[2])
+                            else:
+                                getattr(self, i[0]).append(i[2])
+                        # p.layers_to_stitch.append(5)
+
+
 
                 # Task is not an iterator, thus we just call it's child directly
                 else:
                     for child in task.children:
                         self.run_task(child)# Run the child found by iterating the task-node's children
+
+        try:
+            if(len(r)) > 0:
+                return r
+        except:
+            'nothing needed returning'
+
 
     def execute(self, args=None):
         self.show_tasks()
@@ -301,18 +332,37 @@ class ProjectFlow(object):
         if args:
             self.write_args_to_project(args)
 
-        # TRICKY STRUCTURE: Project_dir is set by project_flow, and if there is no ui, defines where the input, intermediate and output folders will go
-        # if there is a workspace_dir, though, there IS a ui, so project_dir is set to whatever value of workspace_dir there is.
-        # thus, references in the MODEL LOGIC should be to project_dir. BUT NOTE, it is set up in __init__
-        # Note strange notation: I use getattr here just to fill a None in if workspace still hasn't been set.
+        # Check to see if any args have been set that change runtime conditionals.
+        if args:
+            for k, v in args.items():
+                if k.startswith('run_') and k.split('_', 1)[1] in self.task_names_defined:
+                    a = getattr(self, k.split('_', 1)[1], None)
+                    if a:
+                        a.run = v
 
+            # try:
+            #     if k.startswith('run_') and k.split('_', 1)[1] in self.task_names_defined:
+            #         a = getattr(self, k.split('_', 1)[1], None)
+            #         a.run = v
+            #         print(a)
+            # except:
+            #     'parsing didnt find any matching functions.'
+
+
+        # TRICKY NOTE: Workspace_dir and project_dir are often but not always the same. Project dir is defined by the model code while workspace dir is defined by the script or UI that is calling the model code. If workspace_dir is defined, it will overwrite project_dir? Is this right?
         self.workspace_dir = getattr(self, 'workspace_dir', None)
         if self.workspace_dir: # Then there IS a UI, so use itz
             self.project_dir = self.workspace_dir
 
         # If no additional dirs are specified, assume inputs, intermediates and outputs all go in CWD
+        # These are the DEFAULT LOCATIONS, but they could be changed by the UI or script calling it for example to make batch runs happen.
         self.input_dir = getattr(self, 'input_dir', os.path.join(self.project_dir, 'input'))
         self.intermediate_dir =  getattr(self, 'intermediate_dir', os.path.join(self.project_dir, 'intermediate'))
+
+        # Because the UI will give '', need to overwrite this manually.
+        if self.intermediate_dir == '':
+            self.intermediate_dir = os.path.join(self.project_dir, 'intermediate')
+
         self.output_dir = getattr(self, 'output_dir', os.path.join(self.project_dir, 'output'))
 
         self.model_base_data_dir = os.path.join(self.ui_agnostic_project_dir, '../../base_data')  # Data that must be redistributed with this project for it to work. Do not put actual base data here that might be used across many projects.
@@ -328,7 +378,7 @@ class ProjectFlow(object):
         else:
             self.run_dir = self.intermediate_dir
 
-        hb.create_directories([self.input_dir, self.intermediate_dir, self.output_dir])
+        # hb.create_directories([self.input_dir, self.intermediate_dir, self.output_dir])
 
         L.info('\nRunning Project Flow')
         self.run_task(self.task_tree) # LAUNCH the task tree. Everything else will be called via recursive task calls.

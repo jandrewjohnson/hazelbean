@@ -1899,17 +1899,23 @@ def allocate_all_sectors_paged(ndarray[np.float64_t, ndim=2] projections_array n
                                 if sector_yield_notes[sector_counter] == 0:
                                     # Use yield raster value directly
                                     current_yield = sector_yields[sector_counter, paged_counter]
-                                elif sector_yield_notes[sector_counter] == 1:
-                                    # current_yield = sector_yields[sector_counter, paged_counter]
-                                    current_yield = 1.0
-                                elif sector_yield_notes[sector_counter] == 9:
-                                    current_yield = sector_yields[sector_counter, paged_counter] * 9.0 # OVERRODE comments in last email. If the unit really was ann mw per km2, and the area converted was 9km2, it should reflect that.
-                                elif sector_yield_notes[sector_counter] > 9:
-                                    current_yield = sector_yield_notes[sector_counter]
-                                elif sector_yield_notes[sector_counter] < 0:
-                                    current_yield = -1.0 * sector_yield_notes[sector_counter]
-                                # print('current_yield', current_yield)
 
+                                elif sector_yield_notes[sector_counter] == 1:
+                                    # Requirement is expressed in areal terms, so the yield is equal to the amount to be allocated.
+                                    current_yield = 1.0
+                                elif sector_yield_notes[sector_counter] == 2:
+                                    # Use raster yield AND the yield in a different cell.
+                                    # SHORTCUT, currently assuming same yield in adjacent cell. STILL NEED TO HAVE THAT OTHER CELL BE FLIPPED.
+                                    current_yield = sector_yields[sector_counter, paged_counter] * 2
+                                elif sector_yield_notes[sector_counter] == 9:
+                                    # Use raster yield AND the yield in a different cell.
+                                    # SHORTCUT, currently assuming same yield in adjacent cell. STILL NEED TO HAVE THAT OTHER CELL BE FLIPPED.
+                                    current_yield = sector_yields[sector_counter, paged_counter] * 9
+                                elif sector_yield_notes[sector_counter] > 9:
+                                    # Use the fixed value given.
+                                    current_yield = sector_yield_notes[sector_counter]
+                                else:
+                                    raise NameError('WTF, shouldnt get here. 923910')
 
                                 # Determine how much land will be converted this step
                                 if available_land[current_row_id, current_col_id] > current_sector_max_viable_proportions:
@@ -1938,8 +1944,6 @@ def allocate_all_sectors_paged(ndarray[np.float64_t, ndim=2] projections_array n
                                     current_yield_obtained = current_sector_proportion_to_allocate * current_yield # Yield will be 1 for areal
 
                                 elif sector_footprint_requirements[sector_counter] == 5:
-                                    current_yield_obtained = current_yield # NOTE That current yield here is not multiplied by area for this type of conversion.
-                                elif sector_footprint_requirements[sector_counter] == 6:
                                     current_yield_obtained = current_yield # NOTE That current yield here is not multiplied by area for this type of conversion.
                                 else:
                                     raise NameError('wtf')
@@ -2128,24 +2132,14 @@ def allocate_all_sectors_paged(ndarray[np.float64_t, ndim=2] projections_array n
                     sector_current_allocation_location[sector_counter] += 1
                     sector_current_step_location[sector_counter] += 1
 
-                    if True:
-                        if cell_counter % 1012300 == 0  or cell_counter % 1012301 == 0 or cell_counter < 5 or (1000 < cell_counter < 1005) or (100000 < cell_counter < 100005) or (10000000 < cell_counter < 10000005):
-                            report_message = warning_message + ', id: ' + str(cell_counter) + ', sector: ' + sector_names[sector_counter] + ', country: ' + str(
-                                current_sector_current_country_demand) + ', proportion to be allocated: ' + str(
-                                current_sector_proportion_to_allocate) + ' current_yield: ' + str(
-                                current_yield) + ' current_yield_obtained: ' + str(
-                                current_yield_obtained) + ' available land after allocation: ' + str(
-                                available_land[current_row_id, current_col_id]) + ', sector_successful_steps_taken: ' + str(
-                                sector_successful_steps_taken[sector_counter]) + ', sector_current_step_location: ' + str(
-                                sector_current_step_location[sector_counter]) + ', current cell row: ' + str(current_row_id) + ', current cell col: ' + str(
-                                current_col_id) + ', current_sector_min_viable_proportions: ' + str(
-                                current_sector_min_viable_proportions) + ', current_sector_max_viable_proportions: ' + str(
-                                current_sector_max_viable_proportions) + ', sector_continue: ' + str(sector_continue_array[sector_counter])
-                            print(report_message)
                     if False:
+                        if cell_counter % 1012300 == 0  or cell_counter % 1012301 == 0 or cell_counter < 5 or (1000 < cell_counter < 1005) or (100000 < cell_counter < 100005) or (10000000 < cell_counter < 10000005):
+                            print(cell_counter, current_row_id, current_col_id)
+
+                    if True:
                         if warning_message != '' or cell_counter % 1012300 == 0  or cell_counter % 1012301 == 0 or cell_counter < 5 or (1000 < cell_counter < 1005) or (100000 < cell_counter < 100005) or (10000000 < cell_counter < 10000005):
-                            if current_country_id - 1 <= 253 or True:
-                                if True:
+                            if current_country_id - 1 <= 253:
+                                if country_sector_continue_array[current_country_id - 1, sector_counter]:
                                     report += warning_message + '\n'
                                     if warning_message:
                                         report_message = warning_message + ', id: ' + str(cell_counter) + ', sector: ' + sector_names[sector_counter] + ', country: ' + str(country_iso3[current_country_id-1]) + ', sector-country remaining demand: ' + str(current_sector_current_country_demand) + ', proportion to be allocated: ' + str(current_sector_proportion_to_allocate)  + ' available land after allocation: ' + str(available_land[current_row_id, current_col_id])+ ', sector_successful_steps_taken: ' + str(sector_successful_steps_taken[sector_counter])  + ', sector_current_step_location: ' + str(sector_current_step_location[sector_counter]) +  ', current cell row: ' + str(current_row_id) + ', current cell col: ' + str(current_col_id) + ', current_sector_min_viable_proportions: ' + str(current_sector_min_viable_proportions) + ', current_sector_max_viable_proportions: ' + str(current_sector_max_viable_proportions) + ', sector_continue: ' + str(sector_continue_array[sector_counter]) + ', country_sector_continue: ' + str(country_sector_continue_array[current_country_id - 1, sector_counter])
@@ -2403,50 +2397,6 @@ def get_2d_keys_from_sorted_keys_1d(
 
     return output_keys
 
-def factor_convolution_value_to_suitability(
-        ndarray[DTYPEFLOAT64_t, ndim=2] x not None,
-        double direct_suitability,
-        double a,
-        double b,
-        double c):
-    cdef int r_counter, c_counter
-
-    cdef int n_rows = x.shape[0]
-    cdef int n_cols = x.shape[1]
-
-    cdef np.ndarray[np.float64_t, ndim=2] output_array = np.zeros((n_rows, n_cols), dtype=np.float64)
-
-    for r_counter in range(n_rows):
-        for c_counter in range(n_cols):
-            # output_array[r_counter, c_counter] = direct_suitability * (a + b * x + c * x ** 2 + d * x ** 3 + e * x ** 4)
-            output_array[r_counter, c_counter] = (a + (x[r_counter, c_counter] ** b * (2 - a - (1 - c) - x[r_counter, c_counter])))
-
-    return output_array
-
-def calc_change_matrix_of_two_int_arrays(ndarray[DTYPEINT_t, ndim=2] a1 not None, ndarray[DTYPEINT_t, ndim=2] a2 not None):
-    unique1, count1 = np.unique(a1, return_counts=True)
-    unique2, count2 = np.unique(a2, return_counts=True)
-
-    cdef int i, j
-    cdef int n_rows = a1.shape[0]
-    cdef int n_cols = a1.shape[1]
-    cdef int m_n_rows = len(count1)
-
-    # Create lookup from lulc class to lulc counter
-    #cdef np.ndarray[np.int_t, ndim=1] lulc_counters = np.zeros((m_n_rows), dtype=np.int)
-
-    lulc_counters = {}
-
-    for i in range(m_n_rows):
-        lulc_counters[unique1[i]] = i
-
-    cdef np.ndarray[np.int_t, ndim=2] a3 = np.zeros((m_n_rows, m_n_rows), dtype=np.int)
-
-    for i in range(n_rows):
-        for j in range(n_cols):
-            a3[lulc_counters[a1[i, j]], lulc_counters[a2[i, j]]] += 1
-
-    return a3
 
 
 

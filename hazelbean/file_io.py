@@ -93,7 +93,7 @@ def get_strings_between_values(input_string, value_1, value_2):
 
 
 
-def file_to_python_object(file_uri, declare_type=None, verbose=False, return_all_parts=False, xls_worksheet=None, output_key_data_type=None, output_value_data_type=None):
+def file_to_python_object(file_uri, declare_type=None, verbose=False, return_all_parts=False, xls_worksheet=None, output_key_data_type=None, output_value_data_type=None, add_first_col_as_named_var=True):
     """
     Version that follows the simple rule of if the UL cell is blank its a DD. Else LL
 
@@ -168,13 +168,19 @@ def file_to_python_object(file_uri, declare_type=None, verbose=False, return_all
             for row in f:
                 split_row = row.replace('\n','').split(',')
                 if first_row:
-                    col_headers = [cast_type(i, output_key_data_type) for i in split_row[1:]]
+                    if add_first_col_as_named_var:
+                        col_headers = [cast_type(i, output_key_data_type) for i in split_row]
+                    else:
+                        col_headers = [cast_type(i, output_key_data_type) for i in split_row[1:]]
                     first_row = False
                 else:
                     row_odict = OrderedDict()
                     row_headers.append(cast_type(split_row[0], output_key_data_type))
                     for col_header_index in range(len(col_headers)):
-                        row_odict[col_headers[col_header_index]] = cast_type(split_row[col_header_index + 1], output_value_data_type) # Plus 1 because the first in the split_row is the row_header
+                        if add_first_col_as_named_var:
+                            row_odict[col_headers[col_header_index]] = cast_type(split_row[col_header_index], output_value_data_type)
+                        else:
+                            row_odict[col_headers[col_header_index]] = cast_type(split_row[col_header_index + 1], output_value_data_type) # Plus 1 because the first in the split_row is the row_header
                     data[cast_type(split_row[0], output_key_data_type)] = row_odict
     elif data_type == 'LL':
         data = []

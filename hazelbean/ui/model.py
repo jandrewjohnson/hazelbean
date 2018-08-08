@@ -1873,8 +1873,8 @@ class InVESTModel(QtWidgets.QMainWindow):
             ``None``
         """
         lastrun_args = self.assemble_args()
-        print('save', lastrun_args)
-        LOGGER.info('Saving lastrun args %s', lastrun_args)
+        # print('save', lastrun_args)
+        LOGGER.debug('Saving lastrun args %s', lastrun_args)
         self.settings.setValue("lastrun", json.dumps(lastrun_args))
 
     def load_lastrun(self):
@@ -1886,7 +1886,7 @@ class InVESTModel(QtWidgets.QMainWindow):
         # If no lastrun args saved, "{}" (empty json object) is returned
         lastrun_args = self.settings.value("lastrun", "{}")
 
-        print('lastrun_args', lastrun_args)
+        # print('lastrun_args', lastrun_args)
         self.load_args(json.loads(lastrun_args))
 
         self.statusBar().showMessage('Loaded parameters from previous run.',
@@ -2797,7 +2797,7 @@ class HazelbeanModel(QtWidgets.QMainWindow):
             ``None``
         """
         lastrun_args = self.assemble_args()
-        print('save', lastrun_args)
+        # print('save', lastrun_args)
         LOGGER.info('Saving lastrun args %s', lastrun_args)
         self.settings.setValue("lastrun", json.dumps(lastrun_args))
 
@@ -2810,7 +2810,7 @@ class HazelbeanModel(QtWidgets.QMainWindow):
         # If no lastrun args saved, "{}" (empty json object) is returned
         lastrun_args = self.settings.value("lastrun", "{}")
 
-        print('lastrun_args', lastrun_args)
+        # print('lastrun_args', lastrun_args)
         self.load_args(json.loads(lastrun_args))
 
         self.statusBar().showMessage('Loaded parameters from previous run.',
