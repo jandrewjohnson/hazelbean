@@ -48,6 +48,7 @@ MAX_IN_MEMORY_ARRAY_SIZE = 1e+09
 
 # FROM Pygeoprocessing 06
 LOGGING_PERIOD = 5.0  # min 5.0 seconds per update log message for the module
+MAX_TIMEOUT = 60.0
 DEFAULT_GTIFF_CREATION_OPTIONS = ['TILED=YES', 'BIGTIFF=IF_SAFER']
 LARGEST_ITERBLOCK = 2**20  # largest block for iterblocks to read in cells
 

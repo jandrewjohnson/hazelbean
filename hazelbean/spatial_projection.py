@@ -490,8 +490,8 @@ def force_geotiff_to_match_projection_ndv_and_datatype(input_path, match_path, o
         output_ndv = -9999
 
     hb.save_array_as_geotiff(input_array, output_path,
-                             data_type_override=output_datatype,
-                             no_data_value_override=output_ndv,
+                             data_type=output_datatype,
+                             ndv=output_ndv,
                              geotransform_override=input_geotransform,
                              projection_override=match_wkt)
 
@@ -518,8 +518,8 @@ def force_global_angular_data_to_plate_carree(input_path, output_path):
         output_ndv = -9999
 
     hb.save_array_as_geotiff(input_array, output_path,
-                             data_type_override=output_datatype,
-                             no_data_value_override=output_ndv,
+                             data_type=output_datatype,
+                             ndv=output_ndv,
                              geotransform_override=output_geotransform,
                              projection_override=match_wkt)
 
@@ -546,8 +546,8 @@ def force_global_angular_data_to_equal_area_earth_grid(input_path, output_path):
         output_ndv = -9999
 
     hb.save_array_as_geotiff(input_array, output_path,
-                             data_type_override=output_datatype,
-                             no_data_value_override=output_ndv,
+                             data_type=output_datatype,
+                             ndv=output_ndv,
                              geotransform_override=output_geotransform,
                              projection_override=match_wkt)
 

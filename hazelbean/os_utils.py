@@ -625,7 +625,7 @@ def get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=None
 
     sorted_return_list = sorted(return_list)
     if len(sorted_return_list) > 0:
-        most_recent_key = sorted_return_list[0]
+        most_recent_key = sorted_return_list[-1]
         to_return = return_dict[most_recent_key]
     else:
         to_return = []
@@ -1220,8 +1220,10 @@ def copy_shutil_flex(src, dst, copy_tree=True):
             dst = os.path.join(dst, os.path.basename(src))
             shutil.copyfile(src, dst)
     else:
+        dst_dir = os.path.split(dst)[0]
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst_dir, exist_ok=True)
         shutil.copyfile(src, dst)
-
 
 def copy_shutil_copytree(src, dst, symlinks=False, ignore=None):
     for item in os.listdir(src):

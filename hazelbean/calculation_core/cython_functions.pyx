@@ -1012,16 +1012,11 @@ def allocate_from_sorted_keys_with_eligibility_mask(ndarray[DTYPEINT64_t, ndim=2
 
     return allocations
 
-
-
-
 def zonal_stats_on_two_arrays_floating_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
-                                                    ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
-                                                    DTYPEINT64_t zones_ndv,
-                                                    DTYPEFLOAT64_t values_ndv,
-                                                    ):
-
-
+                                              ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
+                                              DTYPEINT64_t zones_ndv,
+                                              DTYPEFLOAT64_t values_ndv,
+                                              ):
     cdef int i, j
     cdef int n_rows = values_array.shape[0]
     cdef int n_cols = values_array.shape[1]
@@ -1037,7 +1032,7 @@ def zonal_stats_on_two_arrays_floating_values(ndarray[DTYPEINT64_t, ndim=2] zone
     cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
 
     for i in range(n_rows):
-        if i%1000 == 0:
+        if i % 1000 == 0:
             print(str((float(i) / float(n_rows)) * 100) + ' percent complete for zonal_stats_on_two_arrays_floating_values().')
         for j in range(n_cols):
             if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
@@ -1045,14 +1040,11 @@ def zonal_stats_on_two_arrays_floating_values(ndarray[DTYPEINT64_t, ndim=2] zone
                 counts[zones_array[i, j]] += 1
     return unique_ids, sums, counts
 
-
 def zonal_stats_on_two_arrays_floating_values_32bit(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
                                                     ndarray[DTYPEFLOAT32_t, ndim=2] values_array not None,
                                                     DTYPEINT_t zones_ndv,
                                                     DTYPEFLOAT32_t values_ndv,
                                                     ):
-
-
     cdef int i, j
     cdef int n_rows = values_array.shape[0]
     cdef int n_cols = values_array.shape[1]
@@ -1066,7 +1058,6 @@ def zonal_stats_on_two_arrays_floating_values_32bit(ndarray[DTYPEINT_t, ndim=2] 
 
     cdef np.ndarray[np.float32_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float32)
     cdef np.ndarray[np.int_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int)
-
 
     for i in range(n_rows):
         # if i%1000 == 0:
@@ -1084,63 +1075,97 @@ def zonal_stats_on_two_arrays_floating_values_32bit(ndarray[DTYPEINT_t, ndim=2] 
                 sums[zones_array[i, j]] += values_array[i, j]
                 counts[zones_array[i, j]] += 1
             # else:
-                # print('NDV HIT', i, j, values_array[i, j])
+            # print('NDV HIT', i, j, values_array[i, j])
     return unique_ids, sums, counts
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def zonal_stats_64bit_float_values(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                                    ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
-                                                    DTYPEINT_t zones_ndv,
-                                                    DTYPEFLOAT64_t values_ndv,
-                                                    ):
+def zonal_statistics_rasterized_new(ndarray[DTYPEFLOAT64_t, ndim=2] zones_array not None,
+                                    ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
+                                    DTYPEFLOAT64_t zones_ndv,
+                                    DTYPEFLOAT64_t values_ndv, ):
+    cdef np.ndarray[np.float64_t, ndim=1] unique_ids = np.unique(zones_array).astype(np.float64)
+    cdef long long n_unique_ids = len(unique_ids)
+    cdef long long i, j
+    cdef long long n_rows = values_array.shape[0]
+    cdef long long n_cols = values_array.shape[1]
+    cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(n_unique_ids, dtype=np.float64)
+    cdef np.ndarray[np.float64_t, ndim=1] counts = np.zeros(n_unique_ids, dtype=np.float64)
 
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
+    # Correct for cases where there are not sequential IDs
+    cdef np.ndarray[np.int64_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int64)
+    for counter, value in enumerate(unique_ids):
+        new_value = <int> (value)
+        new_counter = np.int64(counter)
+        print('new_value', new_value, type(new_value))
+        position_of_zone_from_zone_id[new_value] = counter
+
+    for i in range(n_rows):
+        if i % 500 == 0:
+            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
+        for j in range(n_cols):
+            if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
+                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
+                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <double> (1)  # Possibly unneeded recast
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def zonal_stats_64bit_float_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
+                                   ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
+                                   DTYPEINT64_t zones_ndv,
+                                   DTYPEFLOAT64_t values_ndv,
+                                   ):
+    cdef long long i, j
+    cdef long long n_rows = values_array.shape[0]
+    cdef long long n_cols = values_array.shape[1]
 
     cdef double running_sum = 0
 
     # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
     cdef long long num_ids
-    unique_ids_pre = np.unique(zones_array).astype(np.int32)
+    unique_ids_pre = np.unique(zones_array).astype(np.int64)  # This INT64 was required so that np.zeros got the
     num_ids = unique_ids_pre.size
-    cdef np.ndarray[np.int32_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int32)
+    print('num_ids', num_ids)
+    cdef np.ndarray[np.int64_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int64)
     unique_ids = unique_ids_pre
 
     cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float64)
-    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
+    cdef np.ndarray[np.float64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.float64)
 
     # Correct for cases where there are not sequential IDs
     cdef np.ndarray[np.int64_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int64)
     cdef long long counter
-    cdef long long value
+    cdef double value
+    cdef int new_value
     for counter, value in enumerate(unique_ids):
-        position_of_zone_from_zone_id[value] = counter
+        print('value', value, type(value))
+        new_value = <int> (value)
+        new_counter = np.int64(counter)
+        print('new_value', new_value, type(new_value))
+        position_of_zone_from_zone_id[new_value] = counter
 
     for i in range(n_rows):
-        if i%500 == 0:
+        if i % 500 == 0:
             print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
             if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
                 running_sum += values_array[i, j]
 
                 sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long>(1)
+                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <double> (1)  # Possibly unneeded recast
 
     return unique_ids, sums, counts
-
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def zonal_stats_32bit_float_values(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                                    ndarray[DTYPEFLOAT32_t, ndim=2] values_array not None,
-                                                    DTYPEINT_t zones_ndv,
-                                                    DTYPEFLOAT32_t values_ndv,
-                                                    ):
-
+                                   ndarray[DTYPEFLOAT32_t, ndim=2] values_array not None,
+                                   DTYPEINT_t zones_ndv,
+                                   DTYPEFLOAT32_t values_ndv,
+                                   ):
     cdef int i, j
     cdef int n_rows = values_array.shape[0]
     cdef int n_cols = values_array.shape[1]
@@ -1162,28 +1187,24 @@ def zonal_stats_32bit_float_values(ndarray[DTYPEINT_t, ndim=2] zones_array not N
     for counter, value in enumerate(unique_ids):
         position_of_zone_from_zone_id[value] = counter
 
-
     for i in range(n_rows):
-        if i%500 == 0:
+        if i % 500 == 0:
             print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
             if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-
                 sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long>(1)
+                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
 
     return unique_ids, sums, counts
-
 
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def zonal_stats_32bit_int_values(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                                    ndarray[DTYPEINT_t, ndim=2] values_array not None,
-                                                    DTYPEINT_t zones_ndv,
-                                                    DTYPEINT_t values_ndv,
-                                                    ):
-
+                                 ndarray[DTYPEINT_t, ndim=2] values_array not None,
+                                 DTYPEINT_t zones_ndv,
+                                 DTYPEINT_t values_ndv,
+                                 ):
     cdef int i, j
     cdef int n_rows = values_array.shape[0]
     cdef int n_cols = values_array.shape[1]
@@ -1207,18 +1228,56 @@ def zonal_stats_32bit_int_values(ndarray[DTYPEINT_t, ndim=2] zones_array not Non
     for counter, value in enumerate(unique_ids):
         position_of_zone_from_zone_id[value] = counter
 
-
     for i in range(n_rows):
-        if i%500 == 0:
+        if i % 500 == 0:
             print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
             if values_array_64[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-
                 sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long>(1)
+                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
 
     return unique_ids, sums, counts
 
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def zonal_stats_64bit_int_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
+                                 ndarray[DTYPEINT64_t, ndim=2] values_array not None,
+                                 DTYPEINT64_t zones_ndv,
+                                 DTYPEINT64_t values_ndv,
+                                 ):
+    cdef int i, j
+    cdef int n_rows = values_array.shape[0]
+    cdef int n_cols = values_array.shape[1]
+
+    # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
+    cdef long long num_ids
+    unique_ids_pre = np.unique(zones_array).astype(np.int32)
+    num_ids = unique_ids_pre.size
+    cdef np.ndarray[np.int32_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int32)
+    unique_ids = unique_ids_pre
+
+    cdef np.ndarray[np.int64_t, ndim=1] values_array_64 = np.copy(values_array).astype(np.int64)
+
+    cdef np.ndarray[np.int64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
+
+    # Correct for cases where there are not sequential IDs
+    cdef np.ndarray[np.int32_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int32)
+    cdef int counter
+    cdef int value
+    for counter, value in enumerate(unique_ids):
+        position_of_zone_from_zone_id[value] = counter
+
+    for i in range(n_rows):
+        if i % 500 == 0:
+            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
+        for j in range(n_cols):
+            if values_array_64[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
+                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
+                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
+
+    return unique_ids, sums, counts
 
 @cython.cdivision(True)
 @cython.boundscheck(False)

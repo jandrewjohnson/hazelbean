@@ -38,18 +38,20 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
     :return:
     """
 
+    # NOTE Everything currently forces to 64bit floats and ints.
+
     if type(zones_path_or_array) is str:
         if not zones_dtype:
             zones_dtype = hb.get_datatype_from_uri(zones_path_or_array)
         if not zones_ndv:
-            zones_ndv = hb.get_nodata_from_uri(zones_path_or_array)
+            zones_ndv = np.float64(hb.get_nodata_from_uri(zones_path_or_array))
             if zones_ndv is None:
-                zones_ndv = hb.default_no_data_values_by_gdal_number[zones_dtype]
+                zones_ndv = np.float64(hb.default_no_data_values_by_gdal_number[zones_dtype])
         zones_array = hb.as_array(values_path_or_array).astype(hb.gdal_number_to_numpy_type[values_dtype])
 
     elif type(zones_path_or_array) is np.ndarray:
         zones_dtype = hb.numpy_type_to_gdal_number[zones_path_or_array.dtype]
-        zones_ndv = hb.default_no_data_values_by_gdal_number[zones_dtype]
+        zones_ndv = np.float64(hb.default_no_data_values_by_gdal_number[zones_dtype])
         zones_array = zones_path_or_array.astype(hb.gdal_number_to_numpy_type[zones_dtype])
 
     else:
@@ -59,14 +61,14 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
         if not values_dtype:
             values_dtype = hb.get_datatype_from_uri(values_path_or_array)
         if not values_ndv:
-            values_ndv = hb.get_nodata_from_uri(values_path_or_array)
+            values_ndv = np.float64(hb.get_nodata_from_uri(values_path_or_array))
             if values_ndv is None:
-                values_ndv = hb.default_no_data_values_by_gdal_number[values_dtype]
+                values_ndv = np.float64(hb.default_no_data_values_by_gdal_number[values_dtype])
         values_array = hb.as_array(values_path_or_array).astype(hb.gdal_number_to_numpy_type[values_dtype])
 
     elif type(values_path_or_array) is np.ndarray:
         values_dtype = hb.numpy_type_to_gdal_number[values_path_or_array.dtype]
-        values_ndv = hb.default_no_data_values_by_gdal_number[values_dtype]
+        values_ndv = np.float64(hb.default_no_data_values_by_gdal_number[values_dtype])
         values_array = values_path_or_array.astype(hb.gdal_number_to_numpy_type[values_dtype])
 
     else:
@@ -76,13 +78,18 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
         raise NameError('The zones array size is not the same as the values array. Zones: ' + str(zones_array.shape) + ' Values: ' + str(values_array.shape))
 
     if values_dtype <= 5:
-        unique_ids, sums, counts = hb.zonal_stats_32bit_int_values(zones_array, values_array, zones_ndv, values_ndv)
+        unique_ids, sums, counts = hb.zonal_stats_64bit_int_values(zones_array, values_array, zones_ndv, values_ndv)
     elif values_dtype == 6:
-        unique_ids, sums, counts = hb.zonal_stats_32bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
+        unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
     elif values_dtype == 7:
         # Concurrency problem here? One solution: put pauses before and after cython calls? that seems horrible.
         print (zones_array, values_array, zones_ndv, values_ndv)
-        unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
+        # TODO HACK
+        zones_array_int = zones_array.astype(np.int64)
+        zones_ndv_int = np.int64(zones_ndv)
+        print (333, zones_array.dtype, values_array.dtype)
+        print (type(zones_array), type(values_array), type(zones_ndv), type(values_ndv))
+        unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array_int, values_array, zones_ndv_int, values_ndv)
     else:
         raise TypeError('data type of values not understood.')
 
@@ -91,12 +98,12 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
     zones_array = None
     values_array = None
 
-    # 52 is 4464.
-
     return unique_ids, sums, counts
 
 
 def create_gdal_virtual_raster(input_tifs_uri_list, ouput_virt_uri, srcnodata=None, shifted_extent=None):
+    # DEPRECATED
+    warnings.warn('Deprecated. use create_gdal_virtual_raster_using_file')
     gdal_command = 'gdalbuildvrt '
     if srcnodata:
         gdal_command += '-srcnodata ' + str(srcnodata) + ' '
@@ -186,7 +193,7 @@ def set_ndv_by_mask_path(input_data_path, valid_mask_path, output_path=None, ndv
         band = None
         ds = None
 
-        hb.save_array_as_geotiff(masked_array, output_path, input_data_path, no_data_value_override=ndv, data_type_override=hb.get_datatype_from_uri(input_data_path))
+        hb.save_array_as_geotiff(masked_array, output_path, input_data_path, ndv=ndv, data_type=hb.get_datatype_from_uri(input_data_path))
 
 
 
@@ -430,14 +437,20 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
     assigning a datatype to the geotiff that matches the required pixel depth. Also determines the best (according to me)
     no_data_value to use based on the dtype and range of the data
     '''
+
+    if data_type_override is not None:
+        raise DeprecationWarning('just use data_type')
+    if no_data_value_override is not None:
+        raise DeprecationWarning('just use ndv')
+
     execute_in_python = True
 
     n_cols = array.shape[1]
     n_rows = array.shape[0]
-    geotransform = None
-    projection = None
-    data_type = None
-    ndv = None
+    # geotransform = None
+    # projection = None
+    # data_type = None
+    # ndv = None
 
     if geotiff_uri_to_match != None:
         ds_to_match = gdal.Open(geotiff_uri_to_match)
@@ -458,8 +471,10 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
         else:
             raise NameError('data_type not given and match_data_type not understood.')
     else:
-        raise NameError('data_type not processed correctly.')
-
+        if 0 <= data_type <= 7:
+            'okay cool'
+        else:
+            raise NameError('data_type not processed correctly.')
 
     if ndv is None:
         if match_ndv is not None:
@@ -467,7 +482,11 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
         else:
             raise NameError('ndv not given and match_data_type not understood.')
     else:
-        raise NameError('ndv not processed correctly.')
+        if type(ndv) not in [float, int]:
+            raise NameError('ndv not processed correctly.')
+        else:
+            'okay cool'
+
     array = array.astype(hb.gdal_number_to_numpy_type[data_type])
 
     if geotransform_override:
@@ -535,12 +554,12 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
 
     if compress and not compression_method:
         dst_options.append('COMPRESS=lzw')
-        dst_options.append('PREDICTOR=2')
+        # dst_options.append('PREDICTOR=2') # WARNING, this fails in messed up ways for 64bit data. Just dont use it.
 
     if compression_method:
         dst_options.append('COMPRESS=' + compression_method)
-        if compression_method == 'lzw':
-            dst_options.append('PREDICTOR=2')
+        # if compression_method == 'lzw':
+        #     dst_options.append('PREDICTOR=2')# WARNING, this fails in messed up ways for 64bit data. Just dont use it.
 
             # OUTDATED BUT HILARIOUS NOTE: When I compress an image with gdalwarp the result is often many times larger than the original!
             # By default gdalwarp operates on chunks that are not necessarily aligned with the boundaries of the blocks/tiles/strips of the output format, so this might cause repeated compression/decompression of partial blocks, leading to lost space in the output format.
@@ -844,6 +863,22 @@ def as_array_resampled_to_size(uri, max_size=200000, return_all_parts=False, ver
         band = None
         gdal.Dataset.__swig_destroy__(ds)
         ds = None
+
+    return array
+
+
+def as_array_no_path_resampled_to_size(input_array, max_size=200000, return_all_parts=False, verbose=False):
+    # Use gdal ReadAsArray to only resample to a small enough raster.
+    # This is faster than numpy approaches because it uses the band method to only selectively read from disk.
+    # HOWEVER, i think there is a huge performance hit if the raster is compressed.
+
+    if input_array.size > max_size:
+        scale_factor = float(max_size) / float(input_array.size)
+        render_cols = int(input_array.shape[1] * scale_factor ** 0.5)
+        render_rows = int(input_array.shape[0] * scale_factor ** 0.5)
+        array = band.ReadAsArray(0, 0, input_array.shape[1], input_array.shape[0], render_cols, render_rows)
+    else:
+        array = input_array
 
     return array
 
