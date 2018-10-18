@@ -16,6 +16,7 @@ hazelbean/spatial_projection.py
 hazelbean/spatial_utils.py
 hazelbean/stats.py
 hazelbean/utils.py
+hazelbean/visualization.py
 hazelbean/watershed_processing.py
 hazelbean.egg-info/PKG-INFO
 hazelbean.egg-info/SOURCES.txt

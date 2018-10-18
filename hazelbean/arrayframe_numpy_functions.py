@@ -61,10 +61,10 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
 
     # Build tuples to match the required format of raster_calculator.
     if input_size == 1:
-        if isinstance(input_, str):
-            input_tuples_list = [(input_, 1)]
+        if isinstance(input_[0], str):
+            input_tuples_list = [(input_[0], 1)]
         else:
-            input_tuples_list = [(input_.path, 1)]
+            input_tuples_list = [(input_[0].path, 1)]
     else:
         if isinstance(input_[0], str):
             input_tuples_list = [(i, 1) for i in input_]

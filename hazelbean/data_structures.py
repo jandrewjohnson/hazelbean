@@ -29,9 +29,6 @@ index_synonyms = ['', 'name', 'names', 'unique_name', 'unique_names', 'index', '
 
 
 
-
-
-
 def xls_to_csv(xls_uri, csv_uri, xls_worksheet=None):
     wb = xlrd.open_workbook(xls_uri)
     if xls_worksheet:

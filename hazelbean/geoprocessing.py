@@ -95,7 +95,7 @@ def raster_calculator(
         bad_raster_path_list = True
     else:
         for value in base_raster_path_band_list:
-            if not _is_raster_path_band_formatted(value):
+            if not hb.is_raster_path_band_formatted(value):
                 bad_raster_path_list = True
                 break
     if bad_raster_path_list:
@@ -361,7 +361,7 @@ def align_and_resize_raster_stack(
             if ensure_fits:
                 # This addition to the core geoprocessing code was to fix the case where the alignment moved the target tif
                 # up and to the left, but in a way that then trunkated 1 row/col on the bottom right, causing wrong-shape
-                # raster_math errors.
+                # raster_math errors.z
                 if original_bounding_box[2] > target_bounding_box[2]:
                     target_bounding_box[2] += target_pixel_size[0]
 
@@ -380,6 +380,7 @@ def align_and_resize_raster_stack(
             last_time, lambda: L.info(
                 "align_dataset_list aligning dataset %d of %d",
                 index, len(base_raster_path_list)), hb.LOGGING_PERIOD)
+
         warp_raster(
             base_path, target_pixel_size,
             target_path, resample_method,
@@ -760,10 +761,11 @@ def zonal_statistics(
         of 'min' 'max' 'sum' 'mean' 'count' and 'nodata_count'.  Example:
         {0: {'min': 0, 'max': 1, 'mean': 0.5, 'count': 2, 'nodata_count': 1}}
     """
-    if not _is_raster_path_band_formatted(base_raster_path_band):
+    if not hb.is_raster_path_band_formatted(base_raster_path_band):
         raise ValueError(
             "`base_raster_path_band` not formatted as expected.  Expects "
             "(path, band_index), recieved %s" + base_raster_path_band)
+    print('aggregate_vector_path', aggregate_vector_path)
     aggregate_vector = gdal.OpenEx(aggregate_vector_path)
     if aggregate_layer_name is not None:
         aggregate_layer = aggregate_vector.GetLayerByName(
@@ -1014,7 +1016,6 @@ def get_raster_info(raster_path):
     """
     if not os.path.exists(raster_path):
         raise NameError(raster_path + ' does not exist. Called by get_raster_info')
-
     # print('Getting raster info for ' + raster_path)
     raster_properties = {}
     raster = gdal.OpenEx(raster_path)
@@ -1161,72 +1162,6 @@ def reproject_vector(
     base_vector = None
 
 
-def reclassify_raster(
-        base_raster_path_band, value_map, target_raster_path, target_datatype,
-        target_nodata, values_required=True):
-    """Reclassify pixel values in a raster.
-
-    A function to reclassify values in raster to any output type. By default
-    the values except for nodata must be in `value_map`.
-
-    Parameters:
-        base_raster_path_band (tuple): a tuple including file path to a raster
-            and the band index to operate over. ex: (path, band_index)
-        value_map (dictionary): a dictionary of values of
-            {source_value: dest_value, ...} where source_value's type is the
-            same as the values in `base_raster_path` at band `band_index`.
-            Must contain at least one value.
-        target_raster_path (string): target raster output path; overwritten if
-            it exists
-        target_datatype (gdal type): the numerical type for the target raster
-        target_nodata (numerical type): the nodata value for the target raster
-            Must be the same type as target_datatype
-        band_index (int): Indicates which band in `base_raster_path` the
-            reclassification should operate on.  Defaults to 1.
-        values_required (bool): If True, raise a ValueError if there is a
-            value in the raster that is not found in value_map.
-
-    Returns:
-        None
-
-    Raises:
-        ValueError if values_required is True and the value from
-           'key_raster' is not a key in 'attr_dict'
-    """
-    if len(value_map) == 0:
-        raise ValueError("value_map must contain at least one value")
-    if not _is_raster_path_band_formatted(base_raster_path_band):
-        raise ValueError(
-            "Expected a (path, band_id) tuple, instead got '%s'" %
-            base_raster_path_band)
-    raster_info = get_raster_info(base_raster_path_band[0])
-    nodata = raster_info['nodata'][base_raster_path_band[1]-1]
-    value_map_copy = value_map.copy()
-    # possible that nodata value is not defined, so test for None first
-    # otherwise if nodata not predefined, remap it into the dictionary
-    if nodata is not None and nodata not in value_map_copy:
-        value_map_copy[nodata] = target_nodata
-    keys = sorted(numpy.array(list(value_map_copy.keys())))
-    values = numpy.array([value_map_copy[x] for x in keys])
-
-    def _map_dataset_to_value_op(original_values):
-        """Convert a block of original values to the lookup values."""
-        if values_required:
-            unique = numpy.unique(original_values)
-            has_map = numpy.in1d(unique, keys)
-            if not all(has_map):
-                missing_values = unique[~has_map]
-                raise ValueError(
-                    'The following %d raster values %s from "%s" do not have '
-                    'corresponding entries in the `value_map`: %s' % (
-                        missing_values.size, str(missing_values),
-                        base_raster_path_band[0], str(value_map)))
-        index = numpy.digitize(original_values.ravel(), keys, right=True)
-        return values[index].reshape(original_values.shape)
-
-    raster_calculator(
-        [base_raster_path_band], _map_dataset_to_value_op,
-        target_raster_path, target_datatype, target_nodata)
 
 
 def warp_raster(
@@ -1271,6 +1206,7 @@ def warp_raster(
     target_geotransform = [
         target_bb[0], target_pixel_size[0], 0.0, target_bb[1], 0.0,
         target_pixel_size[1]]
+
     # this handles a case of a negative pixel size in which case the raster
     # row will increase downward
     if target_pixel_size[0] < 0:
@@ -1282,7 +1218,7 @@ def warp_raster(
 
     if target_x_size - int(target_x_size) > 0:
         # target_x_size = int(target_x_size) + 1
-        target_x_size = int(target_x_size) + 0
+        target_x_size = int(target_x_size) + 1
     else:
         target_x_size = int(target_x_size)
 
@@ -2703,18 +2639,6 @@ def _make_logger_callback(message):
     return logger_callback
 
 
-def _is_raster_path_band_formatted(raster_path_band):
-    """Returns true if raster path band is a (str, int) tuple/list."""
-    if not isinstance(raster_path_band, (list, tuple)):
-        return False
-    elif len(raster_path_band) != 2:
-        return False
-    elif not isinstance(raster_path_band[0], (str,)):
-        return False
-    elif not isinstance(raster_path_band[1], int):
-        return False
-    else:
-        return True
 
 
 

@@ -1851,7 +1851,7 @@ class ConditionalFile(_Path):
         # Index 3 is the column to the right of the textfield, to the left of
         # the help button.
         self.widgets[3] = self.path_select_button
-        # START HERE, find a ui solution to display WHAT the default would be.
+        # IDEA, find a ui solution to display WHAT the default would be.
         self.conditional_cb = QtWidgets.QCheckBox('Force recreate')
 
         self.widgets.append(self.conditional_cb)

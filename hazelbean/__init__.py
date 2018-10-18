@@ -7,7 +7,7 @@ IMPORT_LOGGER.setLevel(logging.CRITICAL)
 
 # To increase robustness of others using my code (which may not always be thought out well for redistribution), I protect everything in try/except phrases. However, this will suppress useful logging information, so if imports are failing, re-enable standard importing with use_strict_importing=True
 
-use_strict_importing = False
+use_strict_importing = True
 
 if not use_strict_importing:
     try:
@@ -118,6 +118,12 @@ if not use_strict_importing:
     except:
         IMPORT_LOGGER.debug('Unable to import arrayframe_numpy_functions during Hazelbean init.')
 
+    try:
+        import hazelbean.visualization
+        from hazelbean.visualization import *
+    except:
+        IMPORT_LOGGER.debug('Unable to import arrayframe_numpy_functions during Hazelbean init.')
+
 else:
     from hazelbean import config
     from hazelbean.config import *
@@ -172,6 +178,9 @@ else:
 
     import hazelbean.arrayframe_numpy_functions
     from hazelbean.arrayframe_numpy_functions import *
+
+    import hazelbean.visualization
+    from hazelbean.visualization import *
 
 
 

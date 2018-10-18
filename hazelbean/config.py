@@ -597,7 +597,7 @@ esacci_standard_class_descriptions[200] = 'Bare areas'
 esacci_standard_class_descriptions[210] = 'Water bodies'
 esacci_standard_class_descriptions[220] = 'Permanent snow and ice'
 
-esacci_extended_classes = [00, 10, 11, 12, 20, 30, 40, 50, 60, 61, 62, 70, 71, 72, 80, 81, 82, 90, 100, 110, 120, 121, 122, 130, 140, 150, 151, 152, 153, 160, 170, 180, 190, 200, 201, 202, 210, 220]
+esacci_extended_classes = [0, 10, 11, 12, 20, 30, 40, 50, 60, 61, 62, 70, 71, 72, 80, 81, 82, 90, 100, 110, 120, 121, 122, 130, 140, 150, 151, 152, 153, 160, 170, 180, 190, 200, 201, 202, 210, 220]
 
 esacci_extended_class_descriptions = OrderedDict()
 esacci_extended_class_descriptions[0] = 'No Data'
@@ -659,29 +659,70 @@ esacci_extended_short_class_descriptions[80] = 'tree_needleleaved_deciduous_clos
 esacci_extended_short_class_descriptions[81] = 'tree_needleleaved_deciduous_closed_40'
 esacci_extended_short_class_descriptions[82] = 'tree_needleleaved_deciduous_open_15_40'
 esacci_extended_short_class_descriptions[90] = 'tree_mixed_type'
-esacci_extended_short_class_descriptions[100] = 'Mosaic_tree_and_shrub_50_herbaceous_cover_50'
-esacci_extended_short_class_descriptions[110] = 'Mosaic_herbaceous_cover_50_tree_and_shrub_50'
-esacci_extended_short_class_descriptions[120] = 'Shrubland'
-esacci_extended_short_class_descriptions[121] = 'Evergreen_shrubland'
-esacci_extended_short_class_descriptions[122] = 'Deciduous_shrubland_'
-esacci_extended_short_class_descriptions[130] = 'Grassland'
-esacci_extended_short_class_descriptions[140] = 'Lichens_and_mosses'
-esacci_extended_short_class_descriptions[150] = 'Sparse_vegetation_tree_shrub_herbaceous_cover_15'
-esacci_extended_short_class_descriptions[151] = 'Sparse_tree_15'
-esacci_extended_short_class_descriptions[152] = 'Sparse_shrub_15'
-esacci_extended_short_class_descriptions[153] = 'Sparse_herbaceous_cover_15'
-esacci_extended_short_class_descriptions[160] = 'Tree_cover_flooded_fresh_or_brakish_water'
-esacci_extended_short_class_descriptions[170] = 'Tree_cover_flooded_saline_water'
-esacci_extended_short_class_descriptions[180] = 'Shrub_or_herbaceous_cover_flooded_fresh_saline_brakish_water'
-esacci_extended_short_class_descriptions[190] = 'Urban_areas'
-esacci_extended_short_class_descriptions[200] = 'Bare_areas'
-esacci_extended_short_class_descriptions[201] = 'Consolidated_bare_areas'
-esacci_extended_short_class_descriptions[202] = 'Unconsolidated_bare_areas'
-esacci_extended_short_class_descriptions[210] = 'Water_bodies'
-esacci_extended_short_class_descriptions[220] = 'Permanent_snow_and_ice'
+esacci_extended_short_class_descriptions[100] = 'mosaic_tree_and_shrub_50_herbaceous_cover_50'
+esacci_extended_short_class_descriptions[110] = 'mosaic_herbaceous_cover_50_tree_and_shrub_50'
+esacci_extended_short_class_descriptions[120] = 'shrubland'
+esacci_extended_short_class_descriptions[121] = 'evergreen_shrubland'
+esacci_extended_short_class_descriptions[122] = 'deciduous_shrubland_'
+esacci_extended_short_class_descriptions[130] = 'grassland'
+esacci_extended_short_class_descriptions[140] = 'lichens_and_mosses'
+esacci_extended_short_class_descriptions[150] = 'sparse_vegetation_tree_shrub_herbaceous_cover_15'
+esacci_extended_short_class_descriptions[151] = 'sparse_tree_15'
+esacci_extended_short_class_descriptions[152] = 'sparse_shrub_15'
+esacci_extended_short_class_descriptions[153] = 'sparse_herbaceous_cover_15'
+esacci_extended_short_class_descriptions[160] = 'tree_cover_flooded_fresh_or_brakish_water'
+esacci_extended_short_class_descriptions[170] = 'tree_cover_flooded_saline_water'
+esacci_extended_short_class_descriptions[180] = 'shrub_or_herbaceous_cover_flooded_fresh_saline_brakish_water'
+esacci_extended_short_class_descriptions[190] = 'urban_areas'
+esacci_extended_short_class_descriptions[200] = 'bare_areas'
+esacci_extended_short_class_descriptions[201] = 'consolidated_bare_areas'
+esacci_extended_short_class_descriptions[202] = 'unconsolidated_bare_areas'
+esacci_extended_short_class_descriptions[210] = 'water_bodies'
+esacci_extended_short_class_descriptions[220] = 'permanent_snow_and_ice'
 
+# Decided this is the preferred method for storing the correspondence data and then also making it into a rules dict.
+esacci_to_seals_simplified_correspondence = OrderedDict()
+esacci_to_seals_simplified_correspondence[0] = [0, 'ndv', 'ndv']
+esacci_to_seals_simplified_correspondence[10] = [2, 'crop_rainfed', 'crop']
+esacci_to_seals_simplified_correspondence[11] = [2, 'crop_rainfed_herb', 'crop']
+esacci_to_seals_simplified_correspondence[12] = [2, 'crop_rainfed_tree', 'crop']
+esacci_to_seals_simplified_correspondence[20] = [2, 'crop_irrigated', 'crop']
+esacci_to_seals_simplified_correspondence[30] = [2, 'crop_natural_mosaic', 'crop']
+esacci_to_seals_simplified_correspondence[40] = [2, 'natural_crop_mosaic', 'crop']
+esacci_to_seals_simplified_correspondence[50] = [4, 'tree_broadleaved_evergreen', 'forest']
+esacci_to_seals_simplified_correspondence[60] = [4, 'tree_broadleaved_deciduous_closed_to_open_15', 'forest']
+esacci_to_seals_simplified_correspondence[61] = [4, 'tree_broadleaved_deciduous_closed_40', 'forest']
+esacci_to_seals_simplified_correspondence[62] = [4, 'tree_broadleaved_deciduous_open_15_40', 'forest']
+esacci_to_seals_simplified_correspondence[70] = [4, 'tree_needleleaved_deciduous_closed_to_open_15', 'forest']
+esacci_to_seals_simplified_correspondence[71] = [4, 'tree_needleleaved_evergreen_closed_to_open_15_extended', 'forest']
+esacci_to_seals_simplified_correspondence[72] = [4, 'tree_needleleaved_evergreen_open_15_40', 'forest']
+esacci_to_seals_simplified_correspondence[80] = [4, 'tree_needleleaved_deciduous_closed_to_open_15', 'forest']
+esacci_to_seals_simplified_correspondence[81] = [4, 'tree_needleleaved_deciduous_closed_40', 'forest']
+esacci_to_seals_simplified_correspondence[82] = [4, 'tree_needleleaved_deciduous_open_15_40', 'forest']
+esacci_to_seals_simplified_correspondence[90] = [4, 'tree_mixed_type', 'forest']
+esacci_to_seals_simplified_correspondence[100] = [4, 'mosaic_tree_and_shrub_50_herbaceous_cover_50', 'forest']
+esacci_to_seals_simplified_correspondence[110] = [5, 'mosaic_herbaceous_cover_50_tree_and_shrub_50', 'shrubland']
+esacci_to_seals_simplified_correspondence[120] = [5, 'shrubland', 'shrubland']
+esacci_to_seals_simplified_correspondence[121] = [5, 'evergreen_shrubland', 'shrubland']
+esacci_to_seals_simplified_correspondence[122] = [5, 'deciduous_shrubland_', 'shrubland']
+esacci_to_seals_simplified_correspondence[130] = [3, 'grassland', 'grassland']
+esacci_to_seals_simplified_correspondence[140] = [5, 'lichens_and_mosses', 'shrubland']
+esacci_to_seals_simplified_correspondence[150] = [5, 'sparse_vegetation_tree_shrub_herbaceous_cover_15', 'shrubland']
+esacci_to_seals_simplified_correspondence[151] = [4, 'sparse_tree_15', 'forest']
+esacci_to_seals_simplified_correspondence[152] = [5, 'sparse_shrub_15', 'shrubland']
+esacci_to_seals_simplified_correspondence[153] = [5, 'sparse_herbaceous_cover_15', 'shrubland']
+esacci_to_seals_simplified_correspondence[160] = [4, 'tree_cover_flooded_fresh_or_brakish_water', 'forest']
+esacci_to_seals_simplified_correspondence[170] = [4, 'tree_cover_flooded_saline_water', 'forest']
+esacci_to_seals_simplified_correspondence[180] = [5, 'shrub_or_herbaceous_cover_flooded_fresh_saline_brakish_water', 'shrubland']
+esacci_to_seals_simplified_correspondence[190] = [1, 'urban_areas', 'urban']
+esacci_to_seals_simplified_correspondence[200] = [7, 'bare_areas', 'other']
+esacci_to_seals_simplified_correspondence[201] = [7, 'consolidated_bare_areas', 'other']
+esacci_to_seals_simplified_correspondence[202] = [7, 'unconsolidated_bare_areas', 'other']
+esacci_to_seals_simplified_correspondence[210] = [6, 'water_bodies', 'water']
+esacci_to_seals_simplified_correspondence[220] = [7, 'permanent_snow_and_ice', 'other']
 
-
+# Decided this is the preferred method for storing the correspondence data and then also making it into a rules dict.
+esacci_to_seals_simplified_rules = OrderedDict(zip(esacci_to_seals_simplified_correspondence.keys(), [i[0] for i in esacci_to_seals_simplified_correspondence.values()]))
 
 
 nlcd_colors = OrderedDict()
@@ -759,6 +800,98 @@ nlcd_category_descriptions[81] = 'areas of grasses, legumes, or grass-legume mix
 nlcd_category_descriptions[82] = 'areas used for the production of annual crops, such as corn, soybeans, vegetables, tobacco, and cotton, and also perennial woody crops such as orchards and vineyards. Crop vegetation accounts for greater than 20% of total vegetation. This class also includes all land being actively tilled.'
 nlcd_category_descriptions[90] = 'areas where forest or shrubland vegetation accounts for greater than 20% of vegetative cover and the soil or substrate is periodically saturated with or covered with water.'
 nlcd_category_descriptions[95] = 'Areas where perennial herbaceous vegetation accounts for greater than 80% of vegetative cover and the soil or substrate is periodically saturated with or covered with water.'
+
+e = 2.71828182845904523536028747135266249775724709369995
+pi = 3.14159265358979323846264338327950288419716939937510
+
+luh_data_dir = os.path.join(BASE_DATA_DIR, 'ipbes', 'raw_data')
+# Corresponds to a directory containing the latest LUH data download of states.nc and management.nc from maryland website
+luh_scenario_names = [
+    "RCP2.6_SSP1",
+    "RCP3.4_SSP4",
+    "RCP4.5_SSP2",
+    "RCP6.0_SSP4",
+    "RCP7.0_SSP3",
+    "RCP8.5_SSP5",
+    # "historical",
+]
+
+luh_scenario_states_paths = OrderedDict()
+luh_scenario_states_paths['RCP2.6_SSP1'] = os.path.join(luh_data_dir, 'RCP2.6_SSP1', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-IMAGE-ssp126-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['RCP3.4_SSP4'] = os.path.join(luh_data_dir, 'RCP3.4_SSP4', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-GCAM-ssp434-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['RCP4.5_SSP2'] = os.path.join(luh_data_dir, 'RCP4.5_SSP2', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-MESSAGE-ssp245-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['RCP6.0_SSP4'] = os.path.join(luh_data_dir, 'RCP6.0_SSP4', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-GCAM-ssp460-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['RCP7.0_SSP3'] = os.path.join(luh_data_dir, 'RCP7.0_SSP3', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-AIM-ssp370-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['RCP8.5_SSP5'] = os.path.join(luh_data_dir, 'RCP8.5_SSP5', r"multiple-states_input4MIPs_landState_ScenarioMIP_UofMD-MAGPIE-ssp585-2-1-f_gn_2015-2100.nc")
+luh_scenario_states_paths['historical'] = os.path.join(luh_data_dir, 'historical', r"states.nc")
+
+luh_scenario_management_paths = OrderedDict()
+luh_scenario_management_paths['RCP2.6_SSP1'] = os.path.join(luh_data_dir, 'RCP2.6_SSP1', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-IMAGE-ssp126-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['RCP3.4_SSP4'] = os.path.join(luh_data_dir, 'RCP3.4_SSP4', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-GCAM-ssp434-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['RCP4.5_SSP2'] = os.path.join(luh_data_dir, 'RCP4.5_SSP2', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-MESSAGE-ssp245-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['RCP6.0_SSP4'] = os.path.join(luh_data_dir, 'RCP6.0_SSP4', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-GCAM-ssp460-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['RCP7.0_SSP3'] = os.path.join(luh_data_dir, 'RCP7.0_SSP3', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-AIM-ssp370-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['RCP8.5_SSP5'] = os.path.join(luh_data_dir, 'RCP8.5_SSP5', r"multiple-management_input4MIPs_landState_ScenarioMIP_UofMD-MAGPIE-ssp585-2-1-f_gn_2015-2100.nc")
+luh_scenario_management_paths['historical'] = os.path.join(luh_data_dir, 'historical', r"management.nc")
+
+luh_state_names = [
+    'primf',
+    'primn',
+    'secdf',
+    'secdn',
+    'urban',
+    'c3ann',
+    'c4ann',
+    'c3per',
+    'c4per',
+    'c3nfx',
+    'pastr',
+    'range',
+    'secmb',
+    'secma',
+]
+
+luh_management_names = [
+    'fertl_c3ann',
+    'irrig_c3ann',
+    'crpbf_c3ann',
+    'fertl_c4ann',
+    'irrig_c4ann',
+    'crpbf_c4ann',
+    'fertl_c3per',
+    'irrig_c3per',
+    'crpbf_c3per',
+    'fertl_c4per',
+    'irrig_c4per',
+    'crpbf_c4per',
+    'fertl_c3nfx',
+    'irrig_c3nfx',
+    'crpbf_c3nfx',
+    'fharv_c3per',
+    'fharv_c4per',
+    'flood',
+    'rndwd',
+    'fulwd',
+    'combf',
+    'crpbf_total',
+]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

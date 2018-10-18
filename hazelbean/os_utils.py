@@ -207,8 +207,6 @@ def pretty_time(format=None):
     elif format == 'day':
         return day
 
-def file_root(input_path):
-    return os.path.splitext(os.path.split(input_path)[1])[0]
 
 def explode_uri(input_uri):
     return explode_path(input_uri)
@@ -531,6 +529,7 @@ def insert_string_and_random_string_before_ext(input_uri, input_string):
 
 
 def create_dirs(list_of_folders):
+    print ('Deprecated. Use create_directories.')
     if type(list_of_folders) is str:
         list_of_folders = [list_of_folders]
 
@@ -598,40 +597,6 @@ def list_mounted_drive_paths():
             drive_paths.append(drive_path)
 
     return drive_paths
-
-def get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=None, include_extensions=None):
-
-    files_list = list_filtered_paths_nonrecursively(input_dir, pre_timestamp_string, include_extensions=include_extensions)
-
-    if len(files_list) == 0:
-        split_files_list = []
-    elif len(files_list) == 1:
-        split_files_list = [i.split('_') for i in files_list]
-    else:
-        split_files_list = [i.split('_') for i in files_list]
-
-    return_list = []
-    return_dict = {}
-    for i in split_files_list:
-        if include_extensions:
-            test_string = i[-3] + i[-2] + os.path.splitext(i[-1])[0][0:3]
-        else:
-            test_string = i[-3] + i[-2] + i[-1]
-
-
-        if 29000710 > int(i[-3]) > 18000710 and len(i[-2]) == 6: # Test that it is a valid timestamp
-            return_list.append(test_string)
-            return_dict[test_string] = i
-
-    sorted_return_list = sorted(return_list)
-    if len(sorted_return_list) > 0:
-        most_recent_key = sorted_return_list[-1]
-        to_return = return_dict[most_recent_key]
-    else:
-        to_return = []
-
-    to_return = '_'.join(to_return)
-    return to_return
 
 
 def walklevel(some_dir, level=1):
@@ -740,46 +705,125 @@ def list_filtered_paths_nonrecursively(input_folder, include_strings=None, inclu
                     files.append(os.path.join(current_folder, filename))
     return files
 
-def get_pre_timestamp_file_root(input_path):
-    file_root = hb.explode_path(input_path)['file_root']
-    split = file_root.split('_')
+def split_path_by_timestamp(input_path):
+    """Checks a file for having either a 3-part (long) or 2-part (short) timestamp. If found, returns a tuple of (path_before_timestamp, timestamp, extension
+     For a timestamp to be valid, it must end in something of the form either for LONGFORM: 20180101_120415_123asd
+     or SHORTFORM 20180101_120415
+     """
+    parent_dir, last_element_in_path = os.path.split(input_path)
+    last_element_split = last_element_in_path.split('_')
 
-    result = list(range(len(split)))
+    pre_extension, extension = os.path.splitext(last_element_split[-1])
 
-    for c, i in enumerate(split):
+    if extension:
+        last_element_split[-1] = pre_extension
+
+    # Generate a list where the last three elements are the timestamp elements and everything before is False
+    test_split_elements_shortform_intable = list(range(len(last_element_split)))
+    test_split_elements_longform_intable = list(range(len(last_element_split)))
+
+    has_short_timestamp = False
+    has_long_timestamp = False
+
+    # Test if the last elements are intable FOR SHORTFORM
+    for c, i in enumerate(last_element_split):
         try:
             int(i)
-            result[c] = i
+            test_split_elements_shortform_intable[c] = i
+        except:
+            test_split_elements_shortform_intable[c] = False
+
+    # Test if the last elements are intable FOR LONGFORM
+    for c, i in enumerate(last_element_split):
+        try:
+            int(i)
+            test_split_elements_longform_intable[c] = i
         except:
             if len(i) == 6:
                 try:
                     int(i[0:3])
-                    result[c] = i
+                    test_split_elements_longform_intable[c] = i
                 except:
-                    result[c] = False
+                    test_split_elements_longform_intable[c] = False
             else:
-                result[c] = False
-    final_result = []
-    if result[-3] is not False:
-        if 18000101 < int(result[-3]) < 30180101:
-            final_result.append(True)
-    if result[-2] is not False:
-        if 0 <= int(result[-2]) <= 245999:
-            final_result.append(True)
-    if result[-1] is not False:
-        if 0 <= int(result[-1][0:3]) <= 999:
-            final_result.append(True)
-    if False in set(final_result):
-        raise NameError('get_pre_timestamp_file_root faile on input_path: ' + str(input_path) + ', possibly because the path wasnt formatted in the expected timestamp way.')
+                test_split_elements_longform_intable[c] = False
 
-    return split[0: -3]
+    # Test for shortform validity of last 2 elements
+    shortform_final_result = []
+    if test_split_elements_shortform_intable[-2] is not False:
+        if 18000101 < int(test_split_elements_shortform_intable[-2]) < 30180101:
+            shortform_final_result.append(True)
+        else:
+            shortform_final_result.append(False)
+    if test_split_elements_shortform_intable[-1] is not False:
+        if 0 <= int(test_split_elements_shortform_intable[-1]) <= 245999:
+            shortform_final_result.append(True)
+        else:
+            shortform_final_result.append(False)
+
+    # Test for longform validity of last 2 elements
+    longform_final_result = []
+    if test_split_elements_longform_intable[-3] is not False:
+        if 18000101 < int(test_split_elements_longform_intable[-3]) < 30180101:
+            longform_final_result.append(True)
+        else:
+            longform_final_result.append(False)
+    if test_split_elements_longform_intable[-2] is not False:
+        if 0 <= int(test_split_elements_longform_intable[-2]) <= 245999:
+            longform_final_result.append(True)
+        else:
+            longform_final_result.append(False)
+    if test_split_elements_longform_intable[-1] is not False:
+        if 0 <= int(test_split_elements_longform_intable[-1][0:3]) <= 999:
+            longform_final_result.append(True)
+        else:
+            longform_final_result.append(False)
+
+    if shortform_final_result == [True, True]:
+        has_short_timestamp = True
+    if longform_final_result == [True, True, True]:
+        has_long_timestamp = True
+
+    if has_short_timestamp and has_long_timestamp:
+         raise NameError('WTF?')
+    if not has_short_timestamp and not has_long_timestamp:
+        return None
+
+    if has_short_timestamp:
+        timestamp = '_'.join(last_element_split[-2:])
+        return os.path.join(parent_dir, '_'.join(last_element_split[0: -2])), timestamp, extension
+
+    if has_long_timestamp:
+        timestamp = '_'.join(last_element_split[-3:])
+        return os.path.join(parent_dir, '_'.join(last_element_split[0: -3])), timestamp, extension
+
+
+def get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=None, include_extensions=None, recursive=False):
+    if recursive:
+        paths_list = list_filtered_paths_recursively(input_dir, pre_timestamp_string, include_extensions=include_extensions)
+    else:
+        paths_list = list_filtered_paths_nonrecursively(input_dir, pre_timestamp_string, include_extensions=include_extensions)
+
+    sorted_paths = OrderedDict()
+    for path in paths_list:
+        r = split_path_by_timestamp(path)
+        sorted_paths[r[1]] = r[0] + r[1] + r[2]
 
 
 
+    print ('NEEDS MINOR FIXING FOR get_most_recent_timestamped_file_in_dir')
+    sorted_return_list = sorted(sorted_paths)
+    if len(sorted_return_list) > 0:
+        most_recent_key = sorted_return_list[-1]
+        to_return = sorted_paths[most_recent_key]
+    else:
+        to_return = []
+
+    to_return = '_'.join(to_return)
+    return to_return
 
 
-
-def list_filtered_paths_recursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False, depth=50, only_most_recent=False):
+def list_filtered_paths_recursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False, depth=5000, only_most_recent=False):
     # NOTE: the filter strings can be anywhere in the path, not just the filename.
 
     """If only_most_recent is True, will analyze time stampes and only return similar-named files with the most recent."""
@@ -857,13 +901,14 @@ def list_filtered_paths_recursively(input_folder, include_strings=None, include_
                     files.append(os.path.join(current_folder, filename))
 
             if only_most_recent is True:
-                final_files = []
-                for file in files:
-                    input_dir = os.path.split(file)[0]
-                    pre_timestamp_string = hb.get_pre_timestamp_file_root(file)
-                    most_recent = get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=pre_timestamp_string, include_extensions=None)
-                    final_files.append(most_recent)
-                files = final_files
+                print ('NYI only_most_recent')
+                # final_files = []
+                # for file in files:
+                #     input_dir = os.path.split(file)[0]
+                #     pre_timestamp_string, unused_timestamp = hb.get_pre_timestamp_file_root(file)
+                #     most_recent = get_most_recent_timestamped_file_in_dir(input_dir, pre_timestamp_string=pre_timestamp_string, include_extensions=None)
+                #     final_files.append(most_recent)
+                # files = final_files
     return files
 # Example Usage
 # input_folder = 'G:\\IONE-Old\\NATCAP\\bulk_data\\worldclim\\baseline\\30s'
@@ -967,7 +1012,18 @@ def zip_dir(input_dir, zip_uri):
     zipf.close()
 
 
+def zip_list_of_paths(paths_list, zip_path):
+    if not os.path.splitext(zip_path)[1] == '.zip':
+        raise NameError('zip_path must end with zip')
 
+    zipf = zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED)
+    for i in paths_list:
+        print('Zipping ' + str(i))
+        if not os.path.exists(i):
+            raise NameError('File not found when zipping: ' + str(i))
+        zipf.write(i, os.path.basename(i))
+
+    zipf.close()
 
 
 
@@ -1096,6 +1152,10 @@ def displace_file(src_uri, to_displace_uri, displaced_uri=None, delete_original=
     if delete_original:
         os.remove(displaced_uri)
 
+def rename_with_overwrite(src_path, dst_path):
+    if os.path.exists(dst_path):
+        hb.remove_path(dst_path)
+    os.rename(src_path, dst_path)
 
 def replace_file(src_uri, dst_uri, delete_original=True):
     if os.path.exists(dst_uri):
@@ -1166,22 +1226,25 @@ atexit.register(remove_temporary_files)
 def remove_uri_at_exit(input):
     if isinstance(input, str):
         hb.config.uris_to_delete_at_exit.append(input)
-    elif isinstance(input, nd.ArrayFrame):
+    elif isinstance(input, hb.ArrayFrame):
         hb.config.uris_to_delete_at_exit.append(input.uri)
 
 
 def remove_path(path):
-    if os.path.isdir(path):
-        for root, dirs, files in os.walk(path, topdown=False):
-            for name in files:
-                filename = os.path.join(root, name)
-                os.chmod(filename, stat.S_IWRITE)
-                os.remove(filename)
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(path)
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            for root, dirs, files in os.walk(path, topdown=False):
+                for name in files:
+                    filename = os.path.join(root, name)
+                    os.chmod(filename, stat.S_IWRITE)
+                    os.remove(filename)
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(path)
+        else:
+            os.remove(path)
     else:
-        os.remove(path)
+        'couldnt find path, but no worries, we good.'
 
         # if os.path.isdir(path):
     #     shutil.rmtree(path, ignore_errors=True)
@@ -1208,6 +1271,16 @@ if __name__=='__main__':
 def path_rename_change_dir(input_path, new_dir):
     """Change the directory of a file given its input path, preserving the name. NOTE does not do anything to the file"""
     return os.path.join(new_dir, os.path.split(input_path)[1])
+
+
+def file_root(input_path):
+    return path_file_root(input_path)
+
+
+def path_file_root(input_path):
+    return os.path.splitext(os.path.split(input_path)[1])[0]
+
+
 
 def copy_shutil_flex(src, dst, copy_tree=True):
     """Helper util that allows copying of files or dirs in same function"""

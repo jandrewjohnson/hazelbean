@@ -24,8 +24,8 @@ import math, time
 # ctypedef np.float32_t DTYPEFLOAT32_t
 # ctypedef np.float64_t DTYPEFLOAT64_t
 
-def cython_calc_proportion_of_coarse_res_with_valid_fine_res(np.ndarray[np.int_t, ndim=2] coarse_res_array,
-                                                      np.ndarray[np.int_t, ndim=2] fine_res_array,
+def cython_calc_proportion_of_coarse_res_with_valid_fine_res(np.ndarray[np.float64_t, ndim=2] coarse_res_array,
+                                                      np.ndarray[np.int64_t, ndim=2] fine_res_array,
     ):
     cdef long long num_coarse_rows = coarse_res_array.shape[0]
     cdef long long num_coarse_cols = coarse_res_array.shape[1]
@@ -44,10 +44,24 @@ def cython_calc_proportion_of_coarse_res_with_valid_fine_res(np.ndarray[np.int_t
             current_proportion = np.sum(fine_res_array[cr * aspect_ratio: (cr + 1) * aspect_ratio, cc * aspect_ratio: (cc + 1) * aspect_ratio]) / fine_res_cells_per_coarse_cell
             coarse_res_proporition_array[cr, cc] = current_proportion
 
-
-
-
     return coarse_res_proporition_array
+
+
+def naive_upsample(np.ndarray[np.float64_t, ndim=2] coarse_res_array, long long upsample_factor):
+    """Return an array that makes a n by m array into a n * upsample_factor by m * upsample_factor with the n by m value put into each higher-res cell. """
+    cdef long long num_coarse_rows = coarse_res_array.shape[0]
+    cdef long long num_coarse_cols = coarse_res_array.shape[1]
+    cdef long long num_fine_rows = num_coarse_rows * upsample_factor
+    cdef long long num_fine_cols = num_coarse_cols * upsample_factor
+    cdef long long cr, cc
+
+    cdef np.ndarray[np.float64_t, ndim=2] output_array = np.empty([num_fine_rows, num_fine_cols], dtype=np.float64)
+
+    for cr in range(num_coarse_rows):
+        for cc in range(num_coarse_cols):
+            output_array[cr * upsample_factor: (cr + 1) * upsample_factor, cc * upsample_factor: (cc + 1) * upsample_factor] = coarse_res_array[cr, cc]
+
+    return output_array
 
 # def get_array_neighborhood_by_radius(np.ndarray[DTYPEFLOAT32_t, ndim=2] input_array, int point_x, int point_y, int radius, double fill_value = -255):
     # cdef int num_input_rows = input_array.shape[0]

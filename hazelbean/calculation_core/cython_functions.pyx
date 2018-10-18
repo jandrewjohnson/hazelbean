@@ -220,6 +220,8 @@ cpdef long long[::, ::1] memory_view_reclassify_int_array_by_dict_to_ints(long l
     print('memory_view_reclassify_int_array_by_dict_to_ints')
     cdef size_t n_rows = input_array.shape[0]
     cdef size_t n_cols = input_array.shape[1]
+    print('rules', rules)
+    print('n_rows, n_cols', n_rows, n_cols)
     cdef long long[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEINT64)
 
     for r in range(n_rows):
@@ -2482,14 +2484,16 @@ def factor_convolution_value_to_suitability(
 
     return output_array
 
-def calc_change_matrix_of_two_int_arrays(ndarray[DTYPEINT_t, ndim=2] a1 not None, ndarray[DTYPEINT_t, ndim=2] a2 not None):
+def calc_change_matrix_of_two_int_arrays(ndarray[DTYPEINT_t, ndim=2] a1 not None, ndarray[DTYPEINT_t, ndim=2] a2 not None, list classes not None):
+# def calc_change_matrix_of_two_int_arrays(ndarray[DTYPEINT_t, ndim=2] a1 not None, ndarray[DTYPEINT_t, ndim=2] a2 not None, ndarray[DTYPEINT_t, ndim=1] classes not None):
+    """NOTE WARNING, does not currently take into account case where value is not included in either."""
     unique1, count1 = np.unique(a1, return_counts=True)
     unique2, count2 = np.unique(a2, return_counts=True)
 
     cdef int i, j
     cdef int n_rows = a1.shape[0]
     cdef int n_cols = a1.shape[1]
-    cdef int m_n_rows = len(count1)
+    cdef int m_n_rows = len(classes)
 
     # Create lookup from lulc class to lulc counter
     #cdef np.ndarray[np.int_t, ndim=1] lulc_counters = np.zeros((m_n_rows), dtype=np.int)
@@ -2497,15 +2501,17 @@ def calc_change_matrix_of_two_int_arrays(ndarray[DTYPEINT_t, ndim=2] a1 not None
     lulc_counters = {}
 
     for i in range(m_n_rows):
-        lulc_counters[unique1[i]] = i
+        lulc_counters[classes[i]] = i
 
     cdef np.ndarray[np.int_t, ndim=2] a3 = np.zeros((m_n_rows, m_n_rows), dtype=np.int)
 
-    for i in range(n_rows):
-        for j in range(n_cols):
-            a3[lulc_counters[a1[i, j]], lulc_counters[a2[i, j]]] += 1
+    if m_n_rows > 0:
+        for i in range(n_rows):
+            for j in range(n_cols):
+                if a1[i, j] in lulc_counters and a2[i, j] in lulc_counters:
+                    a3[lulc_counters[a1[i, j]], lulc_counters[a2[i, j]]] += 1
 
-    return a3
+    return a3, lulc_counters
 
 
 

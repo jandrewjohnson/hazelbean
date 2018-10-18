@@ -44,6 +44,27 @@ def xls_to_csv(xls_uri, csv_uri, xls_worksheet=None):
         wr.writerow(sh.row_values(rownum))
     csv_file.close()
 
+
+def xlsx_to_numpy_array(input_path, worksheet_name=None, skip_cols=1, skip_rows=1):
+    wb = xlrd.open_workbook(input_path)
+    if worksheet_name:
+        if isinstance(worksheet_name, str):
+            sh = wb.sheet_by_name(worksheet_name)
+        elif isinstance(worksheet_name, int) or isinstance(worksheet_name, float):
+            sh = wb.sheet_by_index(worksheet_name)
+        else:
+            raise NameError("file_to_python_object given unimplemented xls worksheet type")
+    else:
+        # Assume it's just the first sheet
+        sh = wb.sheet_by_index(0)
+
+    output_array = np.zeros((sh.nrows - skip_rows, sh.ncols - skip_cols))
+    for rownum in range(sh.nrows - skip_rows):
+        output_array[rownum] = sh.row_values(rownum + skip_rows)[skip_cols:]
+
+    return output_array
+
+
 def crop_csv_to_rect(csv_uri, data_rect):
     # Data rect is [ul row, ul col, n_rows, n_cols]
     # -1 means no limit
@@ -508,6 +529,25 @@ def comma_linebreak_string_to_2d_array(input_string, dtype=None):
 
     return a
 
+def dictionary_to_dataframe(input_dictionary, output_path=None):
+    """Input dictionary or OrderedDict should be 2-dimension in row-column nesting."""
+    if type(input_dictionary) not in [OrderedDict, dict]:
+        raise NameError('dictionary_to_dataframe only works with dicts or OrderedDicts. You gave: ' + str(input_dictionary))
+
+    # Inspect first entry in dict to get column names
+    extract_columns = []
+    for k, v in input_dictionary.items():
+        for kk, vv in v.items():
+            extract_columns.append(kk)
+        break
+
+    output_df = pd.DataFrame.from_dict(input_dictionary, orient='index', columns=extract_columns)
+    if output_path is not None:
+        if os.path.splitext(output_path)[1] == '.csv':
+            output_df.to_csv(output_path)
+        elif os.path.splitext(output_path)[1] in ['.xls', '.xlsx']:
+            output_df.to_excel(output_path)
+    return output_df
 
 if __name__=='__main__':
     pass

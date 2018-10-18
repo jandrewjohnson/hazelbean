@@ -32,6 +32,7 @@ class ArrayFrame(object):
         self.datatype = self.data_type
         self.projection = self.ds.GetProjection()
         self.geotransform = self.ds.GetGeoTransform()
+        self.cell_size = self.geotransform[1]
 
         self.bounding_box = hb.get_raster_info(self.path)['bounding_box']
 
@@ -279,9 +280,21 @@ class ArrayFrame(object):
         return hb.raster_calculator_flex([self.path, after.path], op, output_path)
 
 
-def create_af_from_array(input_array, af_path, match_af):
-    hb.save_array_as_geotiff(input_array, af_path, match_af.path)
+def create_af_from_array(input_array, af_path, match_af, compress=False):
+    if not os.path.exists(os.path.split(af_path)[0]):
+        hb.create_directories(os.path.split(af_path)[0])
+    hb.save_array_as_geotiff(input_array, af_path, match_af.path, compress=compress)
     return hb.ArrayFrame(af_path)
+
+def input_flex_as_af(intput_af_or_path):
+    if isinstance(intput_af_or_path, str):
+        af = hb.ArrayFrame(intput_af_or_path)
+    elif isinstance(intput_af_or_path, hb.ArrayFrame):
+        af = intput_af_or_path
+    else:
+        raise NameError('input_flex_as_af unable to interpret intput_af_or_path of ' + str(intput_af_or_path))
+    return af
+
 
 if __name__=='__main__':
     print ('Atttempted to run arrayframe in hazelbean by itself. This doesnt do anything... just sayin.....')

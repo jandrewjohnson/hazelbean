@@ -74,7 +74,10 @@ class ProjectFlow(object):
             self.project_dir = os.getcwd() # This may be temporary though because it may be overwritten by UI
 
         if not os.path.isdir(self.project_dir):
-            raise NotADirectoryError('A Project Flow object is based on defining a project_dir as its base.')
+            try:
+                hb.create_directories(self.project_dir)
+            except:
+                raise NotADirectoryError('A Project Flow object is based on defining a project_dir as its base, but we were unable to create the dir at the given path: ' + self.project_dir)
 
         self.ui_agnostic_project_dir = self.project_dir # The project_dir can be overwritten by a UI but it can be useful to know where it would have been for eg decing project_base_data_dir
         self.project_name = hb.file_root(self.project_dir)
@@ -138,7 +141,8 @@ class ProjectFlow(object):
         setattr(self, task.name, task)
 
         # Tasks inherit by default the projects' logging level.
-        task.logging_level = self.logging_level
+        task.logging_level = kwargs.get('logging_level', self.logging_level)
+
 
         return task
 
@@ -168,13 +172,12 @@ class ProjectFlow(object):
 
             # If the function is not the root execute function, go ahead and run it. Can't run execute this way because it doesn't have a parent.
             if not task.function.__name__ == 'execute':
-
                 # Set task_dirs and cur_dirs based on tree position
                 if task.parent.type == 'task':
                     if task.parent is not None and getattr(task.parent, 'task_dir', None):
                         task.task_dir = os.path.join(task.parent.task_dir, task.function.__name__)
                     else:
-                        task.task_dir = os.path.join(self.run_dir, task.function.__name__)
+                        task.task_dir = os.path.join(self.intermediate_dir, task.function.__name__)
                     self.cur_dir = task.task_dir
                 elif task.parent.type == 'iterator':
                     task.task_dir = os.path.join(self.cur_dir_parent_dir, task.name)
@@ -263,10 +266,11 @@ class ProjectFlow(object):
                     num_iterations = replacement_lengths[0]
 
                     self.run_in_parallel = True # TODOO Connect to UI
-                    n_workers = 10
+                    if not getattr(self, 'num_workers', None):
+                        self.num_workers = 11
                     if self.run_in_parallel:
                         # OPTIMIZATION NOTE: It's slow to spawn 460 processes when they are just going to be skipped, thus run_this for iterators needs to be improved.
-                        worker_pool = multiprocessing.Pool(n_workers) # NOTE, worker pool and results are LOCAL variabes so that they aren't pickled when we pass the project object.
+                        worker_pool = multiprocessing.Pool(self.num_workers) # NOTE, worker pool and results are LOCAL variabes so that they aren't pickled when we pass the project object.
                     results = []
 
                     # Iterate through all children of the iterator with new replacement values.
@@ -320,6 +324,16 @@ class ProjectFlow(object):
         except:
             'nothing needed returning'
 
+    # OPTIONAL START: Cool advance towards project-level logger management. Extent.
+    def log(self, log_input):
+        if self.cur_task.logging_level == 'debug':
+            L.debug(log_input)
+        if self.cur_task.logging_level == 'info':
+            L.info(log_input)
+        if self.cur_task.logging_level == 'warn':
+            L.warn(log_input)
+        if self.cur_task.logging_level == 'critical':
+            L.critical(log_input)
 
     def execute(self, args=None):
         self.show_tasks()
@@ -340,28 +354,21 @@ class ProjectFlow(object):
                     if a:
                         a.run = v
 
-            # try:
-            #     if k.startswith('run_') and k.split('_', 1)[1] in self.task_names_defined:
-            #         a = getattr(self, k.split('_', 1)[1], None)
-            #         a.run = v
-            #         print(a)
-            # except:
-            #     'parsing didnt find any matching functions.'
-
 
         # TRICKY NOTE: Workspace_dir and project_dir are often but not always the same. Project dir is defined by the model code while workspace dir is defined by the script or UI that is calling the model code. If workspace_dir is defined, it will overwrite project_dir? Is this right?
         self.workspace_dir = getattr(self, 'workspace_dir', None)
         if self.workspace_dir: # Then there IS a UI, so use itz
             self.project_dir = self.workspace_dir
-
         # If no additional dirs are specified, assume inputs, intermediates and outputs all go in CWD
         # These are the DEFAULT LOCATIONS, but they could be changed by the UI or script calling it for example to make batch runs happen.
         self.input_dir = getattr(self, 'input_dir', os.path.join(self.project_dir, 'input'))
         self.intermediate_dir =  getattr(self, 'intermediate_dir', os.path.join(self.project_dir, 'intermediate'))
 
         # Because the UI will give '', need to overwrite this manually.
-        if self.intermediate_dir == '':
-            self.intermediate_dir = os.path.join(self.project_dir, 'intermediate')
+        # ALSO, this messed me up when I went to API calls as it wasnt properly being rewritten to based on the new worskpace dir. I'm thinking
+        # I need to ditch the basis, intermediate etc setup for now to hone the existing. THEN add them back in
+        # if self.intermediate_dir == '':
+        #     self.intermediate_dir = os.path.join(self.project_dir, 'intermediate')
 
         self.output_dir = getattr(self, 'output_dir', os.path.join(self.project_dir, 'output'))
 
@@ -373,10 +380,10 @@ class ProjectFlow(object):
         self.basis_name = ''  # Specify a manually-created dir that contains a subset of results that you want to use. For any input that is not created fresh this run, it will instead take the equivilent file from here. Default is '' because you may not want any subsetting.
         self.basis_dir = os.path.join(self.intermediate_dir, self.basis_name)  # Specify a manually-created dir that contains a subset of results that you want to use. For any input that is not created fresh this run, it will instead take the equivilent file from here. Default is '' because you may not want any subsetting.
 
-        if self.make_run_dir:
-            self.run_dir = getattr(self, 'run_dir', hb.make_run_dir(self.intermediate_dir))
-        else:
-            self.run_dir = self.intermediate_dir
+        # if self.make_run_dir:
+        #     self.run_dir = getattr(self, 'run_dir', hb.make_run_dir(self.intermediate_dir))
+        # else:
+        #     self.run_dir = self.intermediate_dir
 
         # hb.create_directories([self.input_dir, self.intermediate_dir, self.output_dir])
 

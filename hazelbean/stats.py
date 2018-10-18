@@ -98,6 +98,17 @@ def concatenate_dfs_horizontally(df_list, column_headers=None):
     return df
 
 
+def convert_af_to_df(input_af, output_column_name=None):
+    if not output_column_name:
+        output_column_name = 'f_af_' + hb.random_alphanumeric_string(3)
+
+    data = input_af.data.flatten()
+
+    df = pd.DataFrame(data=data,  # values
+                      index=np.arange(0, len(data)),  # 1st column as index
+                      columns=[output_column_name])  # 1st row as the column names
+    return df
+
 def convert_df_to_af_via_index(input_df, column, match_af, output_uri):
     match_df = ge.convert_af_to_1d_df(match_af)
     if match_af.size != len(input_df.index):

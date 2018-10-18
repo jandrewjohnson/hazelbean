@@ -11,6 +11,8 @@ import hazelbean as hb
 import scipy
 import geopandas as gpd
 import warnings
+import netCDF4
+import logging
 
 # Conditional imports
 try:
@@ -19,7 +21,7 @@ except:
     ge = None
 
 numpy = np
-L = hb.get_logger('hb spatial_utils')
+L = hb.get_logger('hb_spatial_utils')
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 
@@ -83,12 +85,9 @@ def zonal_statistics_rasterized(zones_path_or_array, values_path_or_array, zones
         unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array, values_array, zones_ndv, values_ndv)
     elif values_dtype == 7:
         # Concurrency problem here? One solution: put pauses before and after cython calls? that seems horrible.
-        print (zones_array, values_array, zones_ndv, values_ndv)
         # TODO HACK
         zones_array_int = zones_array.astype(np.int64)
         zones_ndv_int = np.int64(zones_ndv)
-        print (333, zones_array.dtype, values_array.dtype)
-        print (type(zones_array), type(values_array), type(zones_ndv), type(values_ndv))
         unique_ids, sums, counts = hb.zonal_stats_64bit_float_values(zones_array_int, values_array, zones_ndv_int, values_ndv)
     else:
         raise TypeError('data type of values not understood.')
@@ -263,15 +262,18 @@ def clip_raster_by_vector(input_path, output_path, clip_vector_path, resample_me
 
 
 def clip_while_aligning_to_coarser(input_path, output_path, clip_vector_path, coarser_path, resample_method='nearest',
+                                   target_pixel_size=None, mask_outside_vector=True,
                            output_data_type=None, nodata_target=None, all_touched=False, verbose=False, ensure_fits=False, gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS):
     base_raster_path_list = [coarser_path, input_path]
     clip_temp_path1 = hb.temp('.tif', 'clip_temp1', remove_at_exit=True)
     clip_temp_path2 = hb.temp('.tif', 'clip_temp2', remove_at_exit=True)
     target_raster_path_list = [clip_temp_path1, clip_temp_path2]
+
     resample_method_list = [resample_method, resample_method]
 
-    # NOTE Here we restrict this to the same pixelsize as the input, so it won't actually reproject I BELIEVE
-    target_pixel_size = hb.get_raster_info(input_path)['pixel_size']
+    if target_pixel_size is None:
+        # NOTE Here we restrict this to the same pixelsize as the input, so it won't actually reproject I BELIEVE
+        target_pixel_size = hb.get_raster_info(input_path)['pixel_size']
     bounding_box_mode = hb.get_raster_info(coarser_path)['bounding_box']
     base_vector_path_list = [clip_vector_path]
     raster_align_index = 0
@@ -285,25 +287,28 @@ def clip_while_aligning_to_coarser(input_path, output_path, clip_vector_path, co
 
     # Mask out areas outside vector
     mask_temp_path = hb.temp('.tif', 'mask_temp', True)
-    hb.create_valid_mask_from_vector_path(clip_vector_path, clip_temp_path2, mask_temp_path)
+    if mask_outside_vector:
+        hb.create_valid_mask_from_vector_path(clip_vector_path, clip_temp_path2, mask_temp_path)
 
-    def apply_mask(valid, values):
-        chunk = np.where(valid == 1.0, values, nodata_target)
-        return chunk
+        def apply_mask(valid, values):
+            chunk = np.where(valid == 1.0, values, nodata_target)
+            return chunk
 
-    base_raster_path_band_list = [(mask_temp_path, 1), (clip_temp_path2, 1)]
+        base_raster_path_band_list = [(mask_temp_path, 1), (clip_temp_path2, 1)]
 
-    if not output_data_type:
-        output_data_type = hb.get_datatype_from_uri(input_path)
+        if not output_data_type:
+            output_data_type = hb.get_datatype_from_uri(input_path)
 
-    if not nodata_target:
-        nodata_target = hb.get_nodata_from_uri(input_path)
-    if nodata_target == 0 or not nodata_target:
-        nodata_target = hb.default_no_data_values_by_gdal_number[output_data_type]
+        if not nodata_target:
+            nodata_target = hb.get_nodata_from_uri(input_path)
+        if nodata_target == 0 or not nodata_target:
+            nodata_target = hb.default_no_data_values_by_gdal_number[output_data_type]
 
-    hb.raster_calculator(
-        base_raster_path_band_list, apply_mask, output_path,
-        output_data_type, nodata_target)
+        hb.raster_calculator(
+            base_raster_path_band_list, apply_mask, output_path,
+            output_data_type, nodata_target)
+    else:
+        hb.rename_with_overwrite(clip_temp_path2, output_path)
 
     hb.remove_path(clip_temp_path1)
     hb.remove_path(clip_temp_path2)
@@ -320,6 +325,42 @@ def warp_raster_to_match(input_path, output_path, match_path, resample_method, t
             gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS)
 
 
+def warp_raster_preserving_sum(input_af_or_path, output_path, match_af_or_path, no_data_mode='exclude', gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS):
+    prior_logging_level = L.getEffectiveLevel()
+    L.setLevel(logging.WARN)
+    input_af = hb.input_flex_as_af(input_af_or_path)
+    match_af = hb.input_flex_as_af(match_af_or_path)
+
+    resample_method = 'bilinear'
+
+    L.info('Running warp_raster_preserving_sum')
+    L.info('input_af at ' + str(input_af.path) + ' has sum: ' + str(np.sum(input_af.data)))
+    temp_warp_path = hb.ruri(os.path.split(output_path)[0] + 'temp_warp.tif')
+    hb.warp_raster(input_af.path, (match_af.cell_size, -match_af.cell_size), temp_warp_path, resample_method=resample_method, gtiff_creation_options=gtiff_creation_options)
+
+    input_sum = np.sum(input_af.data.astype(np.float64))
+    temp_warp_sum = np.sum(hb.ArrayFrame(temp_warp_path).data.astype(np.float64))
+    resolution_multiplier = input_sum / temp_warp_sum
+    L.info('Multiplying warped geotiff by resolution_multiplier ' + str(resolution_multiplier))
+
+    hb.raster_calculator([(temp_warp_path, 1)], lambda x: x * resolution_multiplier, output_path, 7, -9999.0, gtiff_creation_options)
+
+    output_af = hb.ArrayFrame(output_path)
+    L.info('output_af at ' + str(output_af.path) + ' has sum: ' + str(np.sum(output_af.data)))
+
+    output_sum = np.sum(output_af.data)
+    error_rate =  input_sum / output_sum
+
+    L.info('Sum error rate: ' + str(error_rate))
+
+    if abs(1.0 - error_rate) > 0.000001:
+        L.critical('NON TRIVIAL summation different in warp_raster_preserving_sum. Error rate: ' + str(error_rate))
+
+    L.setLevel(prior_logging_level)
+
+    hb.remove_path(temp_warp_path)
+
+    return output_af
 
 
 def save_array_as_npy(array, output_uri):
@@ -464,6 +505,9 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
         match_ndv = band_to_match.GetNoDataValue()
         geotransform = ds_to_match.GetGeoTransform()
         projection = ds_to_match.GetProjection()
+    else:
+        match_data_type = None
+
 
     if data_type is None:
         if match_data_type is not None:
@@ -592,7 +636,7 @@ def save_array_as_geotiff(array, out_uri, geotiff_uri_to_match=None, ds_to_match
     if save_png:
         if not ge:
             raise NameError('No plotting interface configured.')
-        ge.show_array(array, output_uri=processed_out_uri.replace('.tif', '.png'), cbar_percentiles=[0,50,100])
+        ge.full_show_array(array, output_uri=processed_out_uri.replace('.tif', '.png'), cbar_percentiles=[2,50,99])
 
 def extract_features_in_shapefile_by_attribute(input_shp_uri, output_shp_uri, column_name, column_filter):
     gdf = gpd.read_file(input_shp_uri)
@@ -1883,7 +1927,120 @@ def cast_to_np64(a):
         else:
             return np.float64(float(a))
 
-def reclassify(input_array, rules):
+def reclassify(input_flex, rules, output_path, target_datatype=None, target_nodata=None, compress=False):
+    if compress is True:
+        gtiff_creation_options = hb.DEFAULT_GTIFF_CREATION_OPTIONS + ['COMPRESS=lzw']
+
+    if isinstance(input_flex, str):
+        input_flex = hb.ArrayFrame(input_flex)
+    else:
+        pass # NBD, but now will retest
+
+    if isinstance(input_flex, hb.ArrayFrame):
+        base_raster_path_band = (input_flex.path, 1)
+        target_datatype = input_flex.data_type
+        target_nodata = input_flex.ndv
+        hb.reclassify_raster(
+            base_raster_path_band=base_raster_path_band, value_map=rules, target_raster_path=output_path, target_datatype=target_datatype,
+            target_nodata=target_nodata, gtiff_creation_options=gtiff_creation_options)
+        return hb.ArrayFrame(output_path)
+
+    elif isinstance(input_flex, np.ndarray):
+        return reclassify_array(input_flex, rules)
+
+    else:
+        raise NameError('reclassify unable to interpret input_flex ' + str(input_flex))
+
+
+def reclassify_raster(
+        base_raster_path_band, value_map, target_raster_path, target_datatype,
+        target_nodata, values_required=True, gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS):
+
+    # HB CHANGE: Minor modificaiton to pass raster creation options.
+
+    """Reclassify pixel values in a raster.
+
+    A function to reclassify values in raster to any output type. By default
+    the values except for nodata must be in `value_map`.
+
+    Parameters:
+        base_raster_path_band (tuple): a tuple including file path to a raster
+            and the band index to operate over. ex: (path, band_index)
+        value_map (dictionary): a dictionary of values of
+            {source_value: dest_value, ...} where source_value's type is the
+            same as the values in `base_raster_path` at band `band_index`.
+            Must contain at least one value.
+        target_raster_path (string): target raster output path; overwritten if
+            it exists
+        target_datatype (gdal type): the numerical type for the target raster
+        target_nodata (numerical type): the nodata value for the target raster
+            Must be the same type as target_datatype
+        band_index (int): Indicates which band in `base_raster_path` the
+            reclassification should operate on.  Defaults to 1.
+        values_required (bool): If True, raise a ValueError if there is a
+            value in the raster that is not found in value_map.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError if values_required is True and the value from
+           'key_raster' is not a key in 'attr_dict'
+    """
+    if len(value_map) == 0:
+        raise ValueError("value_map must contain at least one value")
+    if not hb.is_raster_path_band_formatted(base_raster_path_band):
+        raise ValueError(
+            "Expected a (path, band_id) tuple, instead got '%s'" %
+            base_raster_path_band)
+    raster_info = hb.get_raster_info(base_raster_path_band[0])
+    nodata = raster_info['nodata'][base_raster_path_band[1] - 1]
+    value_map_copy = value_map.copy()
+    # possible that nodata value is not defined, so test for None first
+    # otherwise if nodata not predefined, remap it into the dictionary
+    if nodata is not None and nodata not in value_map_copy:
+        value_map_copy[nodata] = target_nodata
+    keys = sorted(numpy.array(list(value_map_copy.keys())))
+    values = numpy.array([value_map_copy[x] for x in keys])
+
+    def _map_dataset_to_value_op(original_values):
+        """Convert a block of original values to the lookup values."""
+        if values_required:
+            unique = numpy.unique(original_values)
+            has_map = numpy.in1d(unique, keys)
+            if not all(has_map):
+                missing_values = unique[~has_map]
+                raise ValueError(
+                    'The following %d raster values %s from "%s" do not have '
+                    'corresponding entries in the `value_map`: %s' % (
+                        missing_values.size, str(missing_values),
+                        base_raster_path_band[0], str(value_map)))
+        index = numpy.digitize(original_values.ravel(), keys, right=True)
+        return values[index].reshape(original_values.shape)
+
+    hb.raster_calculator(
+        [base_raster_path_band], _map_dataset_to_value_op,
+        target_raster_path, target_datatype, target_nodata, gtiff_creation_options=gtiff_creation_options)
+
+
+def is_raster_path_band_formatted(raster_path_band):
+    """Returns true if raster path band is a (str, int) tuple/list."""
+    if not isinstance(raster_path_band, (list, tuple)):
+        return False
+    elif len(raster_path_band) != 2:
+        return False
+    elif not isinstance(raster_path_band[0], (str,)):
+        return False
+    elif not isinstance(raster_path_band[1], int):
+        return False
+    else:
+        return True
+
+
+def reclassify_array(input_array, rules):
+
+    if isinstance(rules, OrderedDict):
+        rules = dict(rules)
 
     casted_array = cast_to_np64(input_array)
 
@@ -4219,33 +4376,226 @@ def new_raster_from_base_pgp06(
     target_raster = None
 
 
+def extract_luh_netcdf_to_geotiffs(input_nc_uri, output_dir, dim_selection_indices):
+    """
+    WARNING: currently only works given the nc structure of LUH2
+
+    dim_selection_indices allows you to select all the data specific to an asigned set of indices.
+    For example, with a standard time, lat, lon dimension structure of the .nc, assigning
+    dim_selection_indices = [7, None, None] would grab time=7, all lats, all lons. If dim_selection_indices
+    is a single value, it assumes that will be the selection for the first dimension..
+    """
+
+    if type(dim_selection_indices) in [float, int]:
+        dim_selection_indices = [dim_selection_indices, None, None]
+
+    L.info('Called extract_luh_netcdf_to_geotiffs on ' + str(input_nc_uri))
+    ncfile = netCDF4.Dataset(input_nc_uri, 'r')
+    dim_names = ncfile.dimensions.keys()
+    dims_data = OrderedDict()
+    dim_lengths = []
+    for dim_name in dim_names:
+        if dim_name != 'bounds':
+            dims_data[dim_name] = ncfile.variables[dim_name][:]
+            dim_lengths.append(len(dims_data[dim_name]))
+
+    # ASSUME THIS IS GLOBAL to derive the geotransform
+    res = (360.0) / len(dims_data['lon'])
+    geotransform = [-180.0, res, 0.0, 90.0, 0.0, -1 * res]
+    projection = 'wgs84'
+
+    for var_name, var in ncfile.variables.items():
+        if 'standard_name' in var.__dict__:
+            var_string = str(var_name)
+            # var_string = str(var_name) + ' ^ ' + var.__dict__['standard_name'] + ' ^ ' + var.__dict__['long_name']
+
+            L.info('Processing ' + var_string)
+
+            if var_name not in dim_names:
+                # BROKEN, this wouldn't work with other dim_selection_indices schemes.
+                array = var[:][dim_selection_indices[0]]
+
+                no_data_value = -9999
+                array = np.where(array > 1E19, no_data_value, array)
+
+                output_geotiff_uri = os.path.join(output_dir, var_string + '.tif')
+                hb.save_array_as_geotiff(array, output_geotiff_uri, ndv=no_data_value, data_type=7, compress=True,
+                                         geotransform_override=geotransform, projection_override=projection)
+
+                # output_geotiff_rp_uri = hb.suri(output_geotiff_uri, 'eck')
+                # wkt = hb.get_wkt_from_epsg_code(54012)
+                # hb.reproject_dataset_uri(output_geotiff_uri, 0.25, wkt, 'bilinear', output_geotiff_rp_uri)
 
 
+def add_geotiff_overview_file(geotiff_uri):
+    """Creates an .ovr file with the same file_root as the geotiff_uri that allows for faster display of tifs."""
+    command = 'GDALADDO '
+    command += '-r average -ro --config COMPRESS_OVERVIEW DEFLATE  --config INTERLEAVE_OVERVIEW PIXEL '  # --config PHOTOMETRIC_OVERVIEW YCBCR
+    # command += '-r average -ro --config COMPRESS_OVERVIEW JPEG --config JPEG_QUALITY_OVERVIEW 85 --config INTERLEAVE_OVERVIEW PIXEL ' # --config PHOTOMETRIC_OVERVIEW YCBCR
+    command += geotiff_uri
+    command += ' 2 4 8 16 32'
+    print('Running ' + command)
+    os.system(command)
+    # time.sleep(7.25) # Bad concurrency hack
 
 
+def compress_with_gdal_translate(geotiff_uri, displace_original=False, datatype=None, ):
+    backup_uri = hb.suri(geotiff_uri, 'precompress_backup')
+    shutil.copy(geotiff_uri, backup_uri)
+    compressed_uri = hb.suri(geotiff_uri, 'compressed')
+
+    gdal_command = 'gdal_translate -of GTiff '
+    gdal_command += ' -co BIGTIFF=IF_SAFER -co TILED=YES -co COMPRESS=lzw'
+
+    if datatype:
+        if datatype in hb.gdal_number_to_gdal_name.values():
+            gdal_command += ' -ot ' + datatype
+        elif datatype in hb.gdal_number_to_gdal_name.keys():
+            gdal_command += ' -ot ' + hb.gdal_number_to_gdal_name[datatype]
+        else:
+            raise NameError('Not sure how to interepret datatype in compress_with_gdal_translate')
+
+    gdal_command += ' ' + backup_uri + ' ' + compressed_uri
+
+    os.system(gdal_command)
+    os.remove(backup_uri)
+
+    if displace_original:
+        os.remove(geotiff_uri)
+        os.rename(compressed_uri, geotiff_uri)
 
 
+def create_blank_raster_from_base_uri(output_uri, base_uri, data_type, **kwargs):
+    """Creates a new zero-valued raster at output_uri otherwise identical to base_uri raster."""
+    ds = gdal.Open(base_uri)
+    n_cols = ds.RasterXSize
+    n_rows = ds.RasterYSize
+    array = np.zeros((n_rows, n_cols))
+    # data_type = kwargs.get('data_type', 7)
+    hb.save_array_as_geotiff(array, output_uri, geotiff_uri_to_match=base_uri, data_type=data_type,
+                             ndv=hb.config.default_no_data_values_by_gdal_number[data_type])
 
 
+def compress_geotiffs_in_dir_recursive(dir,
+                                       include_extensions='.tif',
+                                       exclude_extensions=None,
+                                       include_strings=None,
+                                       exclude_strings=None,
+                                       displace_original=False,
+                                       min_size_to_compress=2500000,
+                                       force_to_datatype=None,
+                                       ):
+    uris = hb.list_filtered_paths_recursively(dir, include_extensions=include_extensions, exclude_extensions=exclude_extensions, include_strings=include_strings, exclude_strings=exclude_strings)
+
+    for uri in uris:
+        print('Compressing ' + uri)
+        if os.path.getsize(uri) > min_size_to_compress:
+            compress_with_gdal_translate(uri, displace_original=displace_original, datatype=force_to_datatype)
+            print('Compressing ' + uri)
+        else:
+            print('Not compressing ' + uri + '. It wasnt that big...')
 
 
+def add_overviews_for_geotiffs_in_dir_recursive(dir,
+                                                include_extensions='.tif',
+                                                exclude_extensions=None,
+                                                include_strings=None,
+                                                exclude_strings=None,
+                                                overwrite_existing=False,
+                                                ):
+    uris = hb.list_filtered_paths_recursively(dir, include_extensions=include_extensions, exclude_extensions=exclude_extensions, include_strings=include_strings, exclude_strings=exclude_strings)
+
+    for uri in uris:
+        if not os.path.exists(uri + '.ovr') or overwrite_existing:
+            add_geotiff_overview_file(uri)
 
 
+def compress_and_add_overviews_for_geotiffs_in_dir_recursive(dir,
+                                                             include_extensions='.tif',
+                                                             exclude_extensions=None,
+                                                             include_strings=None,
+                                                             exclude_strings=None,
+                                                             displace_original=False,
+                                                             min_size_to_compress=2500000,
+                                                             force_to_datatype=None,
+                                                             ):
+    uris = hb.list_filtered_paths_recursively(dir, include_extensions=include_extensions, exclude_extensions=exclude_extensions, include_strings=include_strings, exclude_strings=exclude_strings)
+
+    for uri in uris:
+
+        if os.path.getsize(uri) > min_size_to_compress:
+            compress_with_gdal_translate(uri, displace_original=displace_original, datatype=force_to_datatype)
+            print('Compressing ' + uri)
+        else:
+            print('Not compressing ' + uri + '. It wasnt that big...')
+        print('Creating overviews for ' + uri)
+
+        if not os.path.exists(uri + '.ovr'):
+            add_geotiff_overview_file(uri)
 
 
+def create_global_polygons_from_graticules_for_degree(degree, output_path, match_path):
+    # Save a shapefile to output_path that creates square polygons for all global squares of size degree by degree.
 
+    try:
+        degree = float(degree)
+    except:
+        raise NameError('Unable to interpret degree ' + str(degree) + ' as a float.')
 
+    # if this file already exists, then remove it
+    if os.path.isfile(output_path):
+        L.warn(
+            "reproject_vector: %s already exists, removing and overwriting",
+            output_path)
+        os.remove(output_path)
 
+    match_vector = gdal.OpenEx(match_path)
 
+    target_sr = hb.get_spatial_ref_uri(match_path)
 
+    # create a new shapefile from the orginal_datasource
+    target_driver = ogr.GetDriverByName('ESRI Shapefile')
+    target_vector = target_driver.CreateDataSource(output_path)
 
+    layer_index = 0
+    layer = match_vector.GetLayer(layer_index)
 
+    layer_dfn = layer.GetLayerDefn()
 
+    # Create new layer for target_vector using same name and
+    # geometry type from match vector but new projection
+    target_layer = target_vector.CreateLayer('layer_name_why', target_sr, ogr.wkbPolygon)
 
+    fld_index = 0
+    original_field = layer_dfn.GetFieldDefn(fld_index)
+    target_field = ogr.FieldDefn('id', ogr.OFTInteger64)
 
+    target_layer.CreateField(target_field)
 
+    target_feature = ogr.Feature(target_layer.GetLayerDefn())
+    for match_feature in layer:
+        break
 
+    counter = 1
+    for i in range(int(360.0 / degree)):
+        for j in range(int(180.0 / degree)):
+            geom = match_feature.GetGeometryRef()
 
+            ring = ogr.Geometry(ogr.wkbLinearRing)
+            ring.AddPoint(-180.0 + i * degree, 90.0 - j * degree)
+            ring.AddPoint(-180.0 + (i + 1) * degree, 90.0 - j * degree)
+            ring.AddPoint(-180.0 + (i + 1) * degree, 90.0 - (j + 1) * degree)
+            ring.AddPoint(-180.0 + i * degree, 90.0 - (j + 1) * degree)
+            ring.AddPoint(-180.0 + i * degree, 90.0 - j * degree)
+
+            # Create polygon
+            poly = ogr.Geometry(ogr.wkbPolygon)
+            poly.AddGeometry(ring)
+            target_feature.SetGeometry(poly)
+
+            target_feature.SetField(fld_index, counter)
+            counter += 1
+            target_layer.CreateFeature(target_feature)
 
 
 
