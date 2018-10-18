@@ -158,14 +158,17 @@ else:
     import hazelbean.watershed_processing
     from hazelbean.watershed_processing import *
 
-    import hazelbean.calculation_core
-    from hazelbean.calculation_core import *
+    try:
+        import hazelbean.calculation_core
+        from hazelbean.calculation_core import *
 
-    import hazelbean.calculation_core.cython_functions
-    from hazelbean.calculation_core.cython_functions import *
+        import hazelbean.calculation_core.cython_functions
+        from hazelbean.calculation_core.cython_functions import *
 
-    import hazelbean.calculation_core.aspect_ratio_array_functions
-    from hazelbean.calculation_core.aspect_ratio_array_functions import *
+        import hazelbean.calculation_core.aspect_ratio_array_functions
+        from hazelbean.calculation_core.aspect_ratio_array_functions import *
+    except:
+        print('Unable to import cython-based functions, but this may not be a problem.')
 
     import hazelbean.ui
     from hazelbean.ui import *
