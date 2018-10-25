@@ -1,4 +1,2 @@
-aspect_ratio_array_functions
-cython_functions
 hazelbean
 tests
