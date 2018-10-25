@@ -19,7 +19,9 @@ class ArrayFrameTester(TestCase):
         geotransform = hb.calc_cylindrical_geotransform_from_array(input_array)
         # projection = hb.get_wkt_from_epsg_code(hb.common_epsg_codes_by_name['plate_carree'])
         projection = 'wgs84'
-        hb.save_array_as_geotiff(input_array, input_uri, geotransform_override=geotransform, projection_override=projection)
+        ndv = 255
+        data_type = 1
+        hb.save_array_as_geotiff(input_array, input_uri, geotransform_override=geotransform, projection_override=projection, ndv=ndv, data_type=data_type)
 
         hb.ArrayFrame(input_uri)
 

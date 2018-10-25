@@ -33,7 +33,7 @@ class CatEarsTester(unittest.TestCase):
 
     def test_make_and_remove_folders(self):
         folder_list = ['asdf', 'asdf/qwer']
-        hb.create_dirs(folder_list)
+        hb.create_directories(folder_list)
         hb.remove_dirs(folder_list, safety_check='delete')
 
     def test_list_dirs_in_dir_recursively(self):

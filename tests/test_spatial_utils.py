@@ -11,6 +11,7 @@ import numpy as np
 class DataStructuresTester(TestCase):
     def setUp(self):
         self.global_5m_raster_path = 'data/ha_per_cell_5m.tif'
+        self.global_1deg_raster_path = 'data/global_1deg_floats.tif'
 
     def tearDown(self):
         pass
@@ -31,7 +32,9 @@ class DataStructuresTester(TestCase):
             # 7: 27,
         }
 
-        b = hb.reclassify(a, rules)
+        temp_path = hb.temp('.tif', remove_at_exit=True)
+
+        b = hb.reclassify(a, rules, temp_path)
         self.assertIsInstance(b, np.ndarray)
 
     def test_rank_array(self):
@@ -93,5 +96,9 @@ class DataStructuresTester(TestCase):
         column_filter = 'NLD-903'
 
         hb.extract_features_in_shapefile_by_attribute(input_shp_uri, output_shp_uri, column_name, column_filter)
+
+    def test_resample_arrayframe(self):
+        temp_path = hb.temp('.tif', 'temp_test_resample_array', True)
+        hb.resample(self.global_5m_raster_path, temp_path, 12)
 
 

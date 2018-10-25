@@ -14,6 +14,7 @@ import warnings
 import netCDF4
 import logging
 
+
 # Conditional imports
 try:
     import geoecon as ge
@@ -164,7 +165,7 @@ def create_gdal_virtual_raster_using_file(file_paths_list, output_tif_path, exte
 
 
 def set_ndv_by_mask_path(input_data_path, valid_mask_path, output_path=None, ndv=None):
-    # NOTE Memory safe.
+    # NOT Memory safe.
     if not output_path:
         ds = gdal.OpenEx(input_data_path, gdal.GA_Update)
         band = ds.GetRasterBand(1)
@@ -363,11 +364,23 @@ def warp_raster_preserving_sum(input_af_or_path, output_path, match_af_or_path, 
     return output_af
 
 
-def save_array_as_npy(array, output_uri):
-    np.save(output_uri, array)
+def save_array_as_npy(array, output_uri, compressed=False):
+    if not compressed:
+        np.save(output_uri, array)
+    else:
+        np.savez_compressed(output_uri, array)
 
 def load_npy_as_array(input_uri, mmap_mode=None):
-    return np.load(input_uri, mmap_mode=mmap_mode)
+    if os.path.splitext(input_uri)[1] == '.npy':
+        return np.load(input_uri, mmap_mode=mmap_mode)
+    elif os.path.splitext(input_uri)[1] == '.npz':
+        # WARNING, this failed for me in GDRA so would not recommend using.
+        a = np.load(input_uri, mmap_mode=mmap_mode)
+        # NOTE, we only return the first array in the npz file (which could contain more arrays).
+        # Also, we assume that you the arrays are not named and thus can be accessed by the default attribute arr_0
+        return a.f.arr_0
+    else:
+        raise NameError('Unknown type given to load_npy_as_array: ' + str(output_uri))
 
 def read_1d_npy_chunk(input_path, start_entry, num_entries):
     """
@@ -736,12 +749,22 @@ def get_attribute_table_columns_from_shapefile(shapefile_path, cols=None):
         return to_return
 
 
-def convert_shapefile_to_multiple_shapefiles_by_id(shapefile_path, id_col_name, output_dir, suffix=''):
+def convert_shapefile_to_multiple_shapefiles_by_id(shapefile_path, id_col_name, output_dir, suffix='', include_ids=None):
     id_values = hb.get_attribute_table_columns_from_shapefile(shapefile_path, id_col_name)
 
+
+    print('include_ids', include_ids)
+    print('id_values', id_values)
     for id_value in id_values:
+        print('id_value', id_value)
         aoi_path = os.path.join(output_dir, 'aoi_' + str(id_value) + '.shp')
-        hb.extract_features_in_shapefile_by_attribute(shapefile_path, aoi_path, id_col_name, id_value)
+        if include_ids:
+            if id_value in include_ids:
+                hb.extract_features_in_shapefile_by_attribute(shapefile_path, aoi_path, id_col_name, id_value)
+            else:
+                'skipping id'
+        else:
+            hb.extract_features_in_shapefile_by_attribute(shapefile_path, aoi_path, id_col_name, id_value)
 
 def check_list_of_paths_exist(input_list):
     for path in input_list:
@@ -1929,7 +1952,7 @@ def cast_to_np64(a):
 
 def reclassify(input_flex, rules, output_path, target_datatype=None, target_nodata=None, compress=False):
     if compress is True:
-        gtiff_creation_options = hb.DEFAULT_GTIFF_CREATION_OPTIONS + ['COMPRESS=lzw']
+        gtiff_creation_options = hb.DEFAULT_GTIFF_CREATION_OPTIONS
 
     if isinstance(input_flex, str):
         input_flex = hb.ArrayFrame(input_flex)

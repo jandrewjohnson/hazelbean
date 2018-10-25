@@ -4,12 +4,14 @@ setup.cfg
 setup.py
 hazelbean/__init__.py
 hazelbean/arrayframe.py
+hazelbean/arrayframe_functions.py
 hazelbean/arrayframe_numpy_functions.py
 hazelbean/cat_ears.py
 hazelbean/config.py
 hazelbean/data_structures.py
 hazelbean/file_io.py
 hazelbean/geoprocessing.py
+hazelbean/geoprocessing_extension.py
 hazelbean/os_utils.py
 hazelbean/project_flow.py
 hazelbean/spatial_projection.py
@@ -56,6 +58,7 @@ tests/manual_t_imports.py
 tests/manual_t_rank_array.py
 tests/test_align_and_resize_raster_stack.py
 tests/test_arrayframe.py
+tests/test_arrayframe_functions.py
 tests/test_cat_ears.py
 tests/test_data_structures.py
 tests/test_describe.py

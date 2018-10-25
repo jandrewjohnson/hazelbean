@@ -37,7 +37,7 @@ BASE_DATA_DIR = os.path.join(PRIMARY_DRIVE, 'onedrive', 'projects', 'base_data')
 BULK_DATA_DIR = os.path.join(PRIMARY_DRIVE, 'bulk_data')
 EXTERNAL_BULK_DATA_DIR = os.path.join(EXTERNAL_BULK_DATA_DRIVE, 'bulk_data')
 HAZELBEAN_WORKING_DIRECTORY = os.path.join(PRIMARY_DRIVE, 'OneDrive\\Projects\\hazelbean\\hazelbean') # TODOO Make this based on config file?
-TEST_DATA_DIR = os.path.join(HAZELBEAN_WORKING_DIRECTORY, 'tests/data')
+TEST_DATA_DIR = os.path.join(HAZELBEAN_WORKING_DIRECTORY, '../tests/data')
 PROJECTS_DIR = os.path.join(PRIMARY_DRIVE, 'OneDrive\\Projects')
 
 TINY_MEMORY_ARRAY_SIZE = 1e+04
@@ -131,9 +131,10 @@ class CustomLogger(logging.LoggerAdapter):
         msg, kwargs = self.process(msg, kwargs)
         stack_list = traceback.format_stack()
         warning_string = ''
+        # stack_list.reverse()
         for i in range(len(stack_list)):
-            warning_string += ' ' + stack_list[i].split(', in ')[0]
-        msg = str(msg) + ' ' + warning_string
+            warning_string += ' ' + stack_list[i].split(', in ')[0] + '\n'
+        msg = str(msg) + ' Stacktrace:\n' + warning_string
         msg = 'CRITICAL ' + msg
         self.logger.critical(msg, *args, **kwargs)
 

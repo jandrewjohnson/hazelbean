@@ -5,6 +5,10 @@ import os, sys
 sys.path.insert(0, '..') #
 import hazelbean as hb
 import numpy as np
+import pygeoprocessing as pgp
+import pygeoprocessing.geoprocessing
+from pygeoprocessing.geoprocessing import get_raster_info, align_and_resize_raster_stack
+
 
 class TestAlign_and_resize_raster_stack(TestCase):
     def setUp(self):
@@ -22,13 +26,13 @@ class TestAlign_and_resize_raster_stack(TestCase):
         base_raster_path_list = [self.global_ha_per_cell_5m]
         target_raster_path_list = [hb.temp('.tif', 'clip1', True)]
         resample_method_list = ['bilinear']
-        target_pixel_size = hb.get_raster_info(self.global_ha_per_cell_5m)['pixel_size']
+        target_pixel_size = get_raster_info(self.global_ha_per_cell_5m)['pixel_size']
         bounding_box_mode = 'intersection'
         base_vector_path_list = [self.two_poly_wgs84_aoi_path]
         raster_align_index = 0
 
 
-        hb.align_and_resize_raster_stack(
+        hb.align_and_resize_raster_stack_ensuring_fit(
             base_raster_path_list, target_raster_path_list, resample_method_list,
             target_pixel_size, bounding_box_mode, base_vector_path_list=base_vector_path_list,
             raster_align_index=raster_align_index, all_touched=True,

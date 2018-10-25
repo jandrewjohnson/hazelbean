@@ -12,7 +12,7 @@ class DataStructuresTester(TestCase):
 
     def test_make_and_remove_folders(self):
         folder_list = ['asdf', 'asdf/qwer']
-        create_dirs(folder_list)
+        create_directories(folder_list)
         remove_dirs(folder_list, safety_check='delete')
 
     def test_make_run_dir(self):

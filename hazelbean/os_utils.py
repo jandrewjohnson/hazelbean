@@ -13,7 +13,7 @@ import zipfile
 from collections import OrderedDict
 import warnings
 import stat
-L = hb.get_logger()
+L = hb.get_logger('os_utils')
 
 def make_run_dir(base_folder=hb.config.TEMPORARY_DIR, run_name='', just_return_string=False):
     """Create a directory in a preconfigured location. Does not delete by default. Returns path of dir."""
@@ -529,7 +529,7 @@ def insert_string_and_random_string_before_ext(input_uri, input_string):
 
 
 def create_dirs(list_of_folders):
-    print ('Deprecated. Use create_directories.')
+    L.critical('Deprecated. Use create_directories.')
     if type(list_of_folders) is str:
         list_of_folders = [list_of_folders]
 

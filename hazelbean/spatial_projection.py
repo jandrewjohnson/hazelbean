@@ -126,9 +126,7 @@ def assert_datasets_in_same_projection(dataset_uri_list):
             unprojected_datasets.add(dataset.GetFileList()[0])
         dataset_projections.append((dataset_sr, dataset.GetFileList()[0]))
 
-    if len(unprojected_datasets) > 0:
-        raise DatasetUnprojected(
-            "These datasets are unprojected %s" % (unprojected_datasets))
+
 
     for index in range(len(dataset_projections)-1):
         if not dataset_projections[index][0].IsSame(
@@ -213,9 +211,22 @@ def get_datasource_bounding_box(datasource_uri):
                     extent[2]]
     return bounding_box
 
+def resample(input_path, output_path, resample_factor, resample_method='bilinear'):
+
+    target_pixel_size = hb.get_cell_size_from_uri(input_path) * resample_factor
+    target_pixel_size_tuple = (target_pixel_size, -target_pixel_size)
+    target_bb = hb.get_raster_info(input_path)['bounding_box']
+    target_sr_wkt = hb.get_raster_info(input_path)['projection']
+
+    hb.warp_raster(input_path, target_pixel_size_tuple, output_path,
+                   resample_method, target_bb=target_bb, target_sr_wkt=target_sr_wkt,
+                   gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS)
+
+
 def resize_and_resample_dataset_uri(
         original_dataset_uri, bounding_box, out_pixel_size, output_uri,
         resample_method, output_datatype=None):
+    print('resize_and_resample_dataset_uri is deprecated. use pygeoprocessing warp or hb.resample (Which is a wrapper).')
     """
     A function to  a datsaet to larger or smaller pixel sizes
 
