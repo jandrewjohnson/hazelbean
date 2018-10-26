@@ -15,10 +15,8 @@ import hazelbean as hb
 from hazelbean.ui import validation
 import os, sys, math, random, shutil, logging
 from collections import OrderedDict
-try:
-    from hazelbean.ui import model, inputs
-except:
-    pass
+
+from hazelbean.ui import model, inputs
 # hb.ui.model.LOGGER.setLevel(logging.WARNING)
 # hb.ui.inputs.LOGGER.setLevel(logging.WARNING)
 L = hb.get_logger('seals', logging_level='debug')

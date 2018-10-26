@@ -7,11 +7,15 @@ Hazelbean started as a personal research package of scripts for Justin Johnson a
 ## Installation
 
 - Install Anaconda3 with the newest python version (tested at python 3.6.3)
-- Install spatial libraries using conda command: "conda install -c conda-forge geopandas"
-- Pip install any missing dependencies
-- Install spatial libraries using conda command: "conda install -c conda-forge rasterstats"
-- Install spatial libraries using conda command: "conda install -c conda-forge netCDF4"
-- Install spatial libraries using conda command: "conda install -c conda-forge basemap"
+- Install libraries using conda command: "conda install -c conda-forge geopandas"
+- Install libraries using conda command: "conda install -c conda-forge rasterstats"
+- Install libraries using conda command: "conda install -c conda-forge netCDF4"
+- Install libraries using conda command: "conda install -c conda-forge basemap"
+- Install libraries using conda command: "conda install -c conda-forge xlrd, markdown"
+- Install libraries using conda command: "conda install -c conda-forge qtpy, qtawesome"
+- Pip install anytree
+- Pip install pygeoprocessing
+- Pip install taskgraph
 
 And then finally,
 - Install hazelbean with "pip install hazelbean"

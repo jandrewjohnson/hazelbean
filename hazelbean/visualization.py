@@ -19,11 +19,12 @@ import scipy.ndimage # Scipy requires this. Can't just do e.g. scipy.ndimage.fil
 import atexit
 import hazelbean as hb
 
-try:
-    import pysal.esda.mapclassify as ps
-    from pysal.esda.mapclassify import User_Defined  # For geopandas plotting
-except:
-    pass
+# Deprecated until pysal api updates.
+# try:
+#     import pysal.esda.mapclassify as ps
+#     from pysal.esda.mapclassify import User_Defined  # For geopandas plotting
+# except:
+#     pass
 
 L = hb.get_logger()
 
@@ -906,105 +907,110 @@ def plot_bar_graph(input_data, **kw):
 
 def plot_geodataframe_shapefile(gdf, column,
                                 figsize=None, color_kwargs=None, **kw):
-    if kw.get('style'):
-        matplotlib.style.use(kw['style'])
-    else:
-        matplotlib.style.use('ggplot')
-
-    vmin = kw.get('vmin', gdf[column].min())
-    vmax = kw.get('vmax', gdf[column].max())
-
-    if not kw.get('make_symmetric_divergent_colorbar'):
-        if vmin < 0 and vmax > 0:
-            make_symmetric_divergent_colorbar = True
+    # Deprecated because pysal was throwing a deprecation and this wasnt THAT cool
+    override_deprecation = False
+    if override_deprecation:
+        if kw.get('style'):
+            matplotlib.style.use(kw['style'])
         else:
-            make_symmetric_divergent_colorbar = False
+            matplotlib.style.use('ggplot')
 
-    if make_symmetric_divergent_colorbar:
-        if abs(vmin) > abs(vmax):
-            vmax = vmin * -1
+        vmin = kw.get('vmin', gdf[column].min())
+        vmax = kw.get('vmax', gdf[column].max())
+
+        if not kw.get('make_symmetric_divergent_colorbar'):
+            if vmin < 0 and vmax > 0:
+                make_symmetric_divergent_colorbar = True
+            else:
+                make_symmetric_divergent_colorbar = False
+
+        if make_symmetric_divergent_colorbar:
+            if abs(vmin) > abs(vmax):
+                vmax = vmin * -1
+            else:
+                vmin = vmax * -1
+
+        color_scheme = kw.get('color_scheme', 'Spectral')
+
+        if kw.get('bins'):
+            bins = kw['bins']
+            num_steps = len(bins)
         else:
-            vmin = vmax * -1
+            num_steps = 21  # This only determines the resolution of the cbar
+            bins = list(np.linspace(vmin, vmax, num_steps))
 
-    color_scheme = kw.get('color_scheme', 'Spectral')
+        # I deprecated this until pysal new api is finished
+        custom_cbar_categories = User_Defined(gdf[column], bins)
+        values = np.array(custom_cbar_categories.yb)
 
-    if kw.get('bins'):
-        bins = kw['bins']
-        num_steps = len(bins)
-    else:
-        num_steps = 21  # This only determines the resolution of the cbar
-        bins = list(np.linspace(vmin, vmax, num_steps))
-    custom_cbar_categories = User_Defined(gdf[column], bins)
-    values = np.array(custom_cbar_categories.yb)
+        fig, ax = plt.subplots(figsize=figsize)
 
-    fig, ax = plt.subplots(figsize=figsize)
+        ax.set_aspect('equal')
 
-    ax.set_aspect('equal')
+        # These are the color category ids, not actual values.
+        mn = values.min()
+        mx = values.max()
 
-    # These are the color category ids, not actual values.
-    mn = values.min()
-    mx = values.max()
+        poly_idx = np.array(
+            (gdf.geometry.type == 'Polygon') | (gdf.geometry.type == 'MultiPolygon'))
+        polys = gdf.geometry[poly_idx]
 
-    poly_idx = np.array(
-        (gdf.geometry.type == 'Polygon') | (gdf.geometry.type == 'MultiPolygon'))
-    polys = gdf.geometry[poly_idx]
+        if color_kwargs is None:
+            color_kwargs = {}  # This is so that i don't put a mutable variable as a default.
 
-    if color_kwargs is None:
-        color_kwargs = {}  # This is so that i don't put a mutable variable as a default.
+        color_kwargs['linewidth'] = kw.get('linewidth', 0.5)
 
-    color_kwargs['linewidth'] = kw.get('linewidth', 0.5)
+        if not polys.empty:
+            plot_polygon_collection(ax, polys, values[poly_idx], True,
+                                    vmin=mn, vmax=mx, cmap=color_scheme,
+                                    color_kwargs=color_kwargs, **kw)
+        show_lat_lon_lines = kw.get('show_lat_lon_lines', True)
+        if show_lat_lon_lines:
+            ax.get_xaxis().set_visible(True)
+            ax.get_yaxis().set_visible(True)
+        else:
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
 
-    if not polys.empty:
-        plot_polygon_collection(ax, polys, values[poly_idx], True,
-                                vmin=mn, vmax=mx, cmap=color_scheme,
-                                color_kwargs=color_kwargs, **kw)
-    show_lat_lon_lines = kw.get('show_lat_lon_lines', True)
-    if show_lat_lon_lines:
-        ax.get_xaxis().set_visible(True)
-        ax.get_yaxis().set_visible(True)
-    else:
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
+        show_lat_lon_ticks = kw.get('show_lat_lon_ticks', False)
+        if show_lat_lon_ticks:
+            ax.get_xaxis().set_ticklabels([])
+            ax.get_yaxis().set_ticklabels([])
+        else:
+            ax.get_xaxis().set_ticklabels([])
+            ax.get_yaxis().set_ticklabels([])
 
-    show_lat_lon_ticks = kw.get('show_lat_lon_ticks', False)
-    if show_lat_lon_ticks:
-        ax.get_xaxis().set_ticklabels([])
-        ax.get_yaxis().set_ticklabels([])
-    else:
-        ax.get_xaxis().set_ticklabels([])
-        ax.get_yaxis().set_ticklabels([])
+        if kw.get('title'):
+            ax.set_title(kw['title'])
 
-    if kw.get('title'):
-        ax.set_title(kw['title'])
+        # Draw Cbar
+        cbar_label = kw.get('cbar_label', None)
+        fig = ax.get_figure()  # had to get the fig from the ax, because geopandas plot only returns an ax.
+        sm = plt.cm.ScalarMappable(cmap=color_scheme, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm._A = []  # fake up the array of the scalar mappable. Urgh...
+        if kw.get('cbar_position') == 'vertical':
+            cax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # place it manually to the right
+            fig.colorbar(sm, orientation='vertical', label=cbar_label, cax=cax)
+        else:
+            cax = fig.add_axes([0.2, 0.08, 0.6, 0.03])  # place it manually to the bottom
+            fig.colorbar(sm, orientation='horizontal', label=cbar_label, cax=cax)
 
-    # Draw Cbar
-    cbar_label = kw.get('cbar_label', None)
-    fig = ax.get_figure()  # had to get the fig from the ax, because geopandas plot only returns an ax.
-    sm = plt.cm.ScalarMappable(cmap=color_scheme, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-    sm._A = []  # fake up the array of the scalar mappable. Urgh...
-    if kw.get('cbar_position') == 'vertical':
-        cax = fig.add_axes([0.9, 0.15, 0.03, 0.7])  # place it manually to the right
-        fig.colorbar(sm, orientation='vertical', label=cbar_label, cax=cax)
-    else:
-        cax = fig.add_axes([0.2, 0.08, 0.6, 0.03])  # place it manually to the bottom
-        fig.colorbar(sm, orientation='horizontal', label=cbar_label, cax=cax)
+            # Make it less vertically tall to fit the cbar
+            pos1 = ax.get_position()  # get the original position
+            shift = 1.22
+            pos2 = [pos1.x0 - ((shift - 1) / 2), pos1.y0, pos1.width * shift, pos1.height]
+            ax.set_position(pos2)
 
-        # Make it less vertically tall to fit the cbar
+        # Make it a little wider
         pos1 = ax.get_position()  # get the original position
-        shift = 1.22
-        pos2 = [pos1.x0 - ((shift - 1) / 2), pos1.y0, pos1.width * shift, pos1.height]
+        shift = 0.04
+        pos2 = [pos1.x0, pos1.y0 + shift, pos1.width, pos1.height * (1 - shift)]
         ax.set_position(pos2)
 
-    # Make it a little wider
-    pos1 = ax.get_position()  # get the original position
-    shift = 0.04
-    pos2 = [pos1.x0, pos1.y0 + shift, pos1.width, pos1.height * (1 - shift)]
-    ax.set_position(pos2)
+        # plt.tight_layout() ignored cbar
 
-    # plt.tight_layout() ignored cbar
-
-    if kw.get('output_uri'):
-        fig.savefig(kw['output_uri'])
+        if kw.get('output_uri'):
+            fig.savefig(kw['output_uri'])
 
     return ax
 

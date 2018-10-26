@@ -23,6 +23,7 @@ hazelbean/watershed_processing.py
 hazelbean.egg-info/PKG-INFO
 hazelbean.egg-info/SOURCES.txt
 hazelbean.egg-info/dependency_links.txt
+hazelbean.egg-info/requires.txt
 hazelbean.egg-info/top_level.txt
 hazelbean/calculation_core/aspect_ratio_array_functions.cpp
 hazelbean/calculation_core/cython_functions.cpp
