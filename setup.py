@@ -2,6 +2,7 @@
 from setuptools import setup, find_packages
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
+from Cython.Build import cythonize
 import numpy
 
 
@@ -15,10 +16,9 @@ include_package_data=True
 setup(
   name = 'hazelbean',
   packages = packages,
-  version = '0.7.9',
+  version = '0.8.0',
   description = 'Geospatial research tools',
   long_description=long_description,
-  long_description_content_type="text/markdown",
   author = 'Justin Andrew Johnson',
   url = 'https://github.com/jandrewjohnson/hazelbean',
   download_url = 'https://github.com/jandrewjohnson/hazelbean',
@@ -28,4 +28,22 @@ setup(
   #ext_modules=[Extension("cython_functions", ["hazelbean/calculation_core/cython_functions.c"]),
   #             Extension("aspect_ratio_array_functions", ["hazelbean/calculation_core/aspect_ratio_array_functions.c"]),
   #             ]
+  
+  ext_modules=cythonize(
+    [Extension(
+        "hazelbean.calculation_core.cython_functions",
+        sources=["hazelbean/calculation_core/cython_functions.pyx"],
+        include_dirs=[
+            numpy.get_include(),
+            'hazelbean/calculation_core/cython_functions'],
+        language="c++",
+    ),
+     Extension(
+         "hazelbean.calculation_core.aspect_ratio_array_functions",
+         sources=[
+             "hazelbean/calculation_core/aspect_ratio_array_functions.pyx"],
+         include_dirs=[numpy.get_include()],
+         language="c++")],
+    )
+  
 )
