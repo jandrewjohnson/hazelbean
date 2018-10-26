@@ -19,7 +19,7 @@ include_package_data=True
 setup(
   name = 'hazelbean',
   packages = packages,
-  version = '0.8.6',
+  version = '0.8.7',
   description = 'Geospatial research tools',
   long_description=long_description,
   author = 'Justin Andrew Johnson',
