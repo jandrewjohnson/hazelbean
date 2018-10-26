@@ -23,7 +23,7 @@ except:
 
 numpy = np
 L = hb.get_logger('hb_spatial_utils')
-from mpl_toolkits.basemap import Basemap
+
 import matplotlib.pyplot as plt
 
 import hazelbean as hb

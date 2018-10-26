@@ -11,7 +11,7 @@ import matplotlib.colors
 from matplotlib import pyplot as plt
 import mpl_toolkits
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from mpl_toolkits.basemap import Basemap
+# from mpl_toolkits.basemap import Basemap
 import geopandas as gpd
 import pandas as pd
 import scipy
@@ -365,7 +365,7 @@ def full_show_array(input_array, **kwargs):
         bounding_box = [llcrnrlat, urcrnrlat, llcrnrlon, urcrnrlon]
         return bounding_box
 
-    if use_basemap:
+    if use_basemap and False:
         if use_proportion_clip:
             bounding_box_processed = convert_bounding_box_proportion_to_lat_lon(bounding_box_proportion_clip, m)
 
@@ -517,35 +517,36 @@ def full_show_array(input_array, **kwargs):
     # cmap.set_under('w') #i think the way to fix this is modify the array we're plotting. #this messes up when vmin clips something, but seems to fix the bug in pcoormesh that doesn't work with set_bad method.
 
     # If using basemap, create a basemap object and either an imshow or pcolormesh object to plot the array.
-    if use_basemap:
-        bm = Basemap(projection=projection, lon_0=0, llcrnrlat=bounding_box_processed[0], urcrnrlat=bounding_box_processed[1], llcrnrlon=bounding_box_processed[2], urcrnrlon=bounding_box_processed[3], resolution=resolution, area_thresh=5000)  # Resolution: c (crude), l (low), i (intermediate), h (high), f (full), area_thresh=10000 is size of lakes and coastlines to ignore in m2
+    if use_basemap and False: # DEPRECATED start using Cartopy
+        pass
+        # bm = Basemap(projection=projection, lon_0=0, llcrnrlat=bounding_box_processed[0], urcrnrlat=bounding_box_processed[1], llcrnrlon=bounding_box_processed[2], urcrnrlon=bounding_box_processed[3], resolution=resolution, area_thresh=5000)  # Resolution: c (crude), l (low), i (intermediate), h (high), f (full), area_thresh=10000 is size of lakes and coastlines to ignore in m2
 
-        if kwargs.get('draw_continents'):
-            overlay_shp_uri = os.path.join(hb.config.BASE_DATA_DIR, 'naturalearth', 'ne_110m_coastline.shp')
-
-        if overlay_shp_uri:
-            s = bm.readshapefile(overlay_shp_uri, 'attributes', linewidth=0.15, color='0.1')
-
-        im = bm.imshow(np.flipud(m), cmap=cmap, interpolation='nearest', vmin=vmin, vmax=vmax)
-
-        if not overlay_shp_uri:
-            bm.drawcoastlines(linewidth=0.15, color='0.1')
-            bm.drawcountries(linewidth=0.15, color='0.1')
-
-        # bm.drawrivers()
-        if show_lat_lon:
-            bm.drawparallels(np.arange(-90., 120., 30.), linewidth=0.25)
-            bm.drawmeridians(np.arange(0., 420., 60.), linewidth=0.25)
-        if show_state_boundaries:
-            bm.drawstates(linewidth=0.15, color='0.1')
-
-        divider = mpl_toolkits.axes_grid1.make_axes_locatable(plt.gca())
-        cbar = plt.colorbar(im, orientation='horizontal', ticks=cbar_tick_locations)
-
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.spines['left'].set_visible(False)
+        # if kwargs.get('draw_continents'):
+        #     overlay_shp_uri = os.path.join(hb.config.BASE_DATA_DIR, 'naturalearth', 'ne_110m_coastline.shp')
+        #
+        # if overlay_shp_uri:
+        #     s = bm.readshapefile(overlay_shp_uri, 'attributes', linewidth=0.15, color='0.1')
+        #
+        # im = bm.imshow(np.flipud(m), cmap=cmap, interpolation='nearest', vmin=vmin, vmax=vmax)
+        #
+        # if not overlay_shp_uri:
+        #     bm.drawcoastlines(linewidth=0.15, color='0.1')
+        #     bm.drawcountries(linewidth=0.15, color='0.1')
+        #
+        # # bm.drawrivers()
+        # if show_lat_lon:
+        #     bm.drawparallels(np.arange(-90., 120., 30.), linewidth=0.25)
+        #     bm.drawmeridians(np.arange(0., 420., 60.), linewidth=0.25)
+        # if show_state_boundaries:
+        #     bm.drawstates(linewidth=0.15, color='0.1')
+        #
+        # divider = mpl_toolkits.axes_grid1.make_axes_locatable(plt.gca())
+        # cbar = plt.colorbar(im, orientation='horizontal', ticks=cbar_tick_locations)
+        #
+        # ax.spines['top'].set_visible(False)
+        # ax.spines['right'].set_visible(False)
+        # ax.spines['bottom'].set_visible(False)
+        # ax.spines['left'].set_visible(False)
 
     # Due to limitations in the basemap method, this section creates an imshow object instead. It doesn't have projection ability but is faster and more stable for regular arrays.
     else:  # at the moment, this is still not implemented.

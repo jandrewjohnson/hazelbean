@@ -6,11 +6,13 @@ Hazelbean started as a personal research package of scripts for Justin Johnson a
 
 ## Installation
 
+Pip installing Hazelbean will attempt to install required libraries, but many of these must be compiled for your computer. You can solve each one manually for your chosen opperating system, or you can use these Anaconda-based steps here:
+
 - Install Anaconda3 with the newest python version (tested at python 3.6.3)
 - Install libraries using conda command: "conda install -c conda-forge geopandas"
 - Install libraries using conda command: "conda install -c conda-forge rasterstats"
 - Install libraries using conda command: "conda install -c conda-forge netCDF4"
-- Install libraries using conda command: "conda install -c conda-forge basemap"
+- Install libraries using conda command: "conda install -c conda-forge cartopy"
 - Install libraries using conda command: "conda install -c conda-forge xlrd, markdown"
 - Install libraries using conda command: "conda install -c conda-forge qtpy, qtawesome"
 - Pip install anytree
