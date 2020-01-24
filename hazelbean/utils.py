@@ -171,22 +171,22 @@ def safe_string(string_possibly_unicode_or_number):
 
 def describe_af(input_af):
     if not input_af.path and not input_af.shape:
-        return '''Numdal ArrayFrame (empty). The usual next steps are to set the shape (af.shape = (30, 50),
+        return '''Hazelbean ArrayFrame (empty). The usual next steps are to set the shape (af.shape = (30, 50),
                     then set the path (af.path = \'C:\\example_raster_folder\\example_raster.tif\') and finally set the raster
                     with one of the set raster functions (e.g. af = af.set_raster_with_zeros() )'''
     elif input_af.shape and not input_af.path:
-        return 'Numdal ArrayFrame with shape set (but no path set). Shape: ' + str(input_af.shape)
+        return 'Hazelbean ArrayFrame with shape set (but no path set). Shape: ' + str(input_af.shape)
     elif input_af.shape and input_af.path and not input_af.data_type:
-        return 'Numdal ArrayFrame with path set. ' + input_af.path + ' Shape: ' + str(input_af.shape)
+        return 'Hazelbean ArrayFrame with path set. ' + input_af.path + ' Shape: ' + str(input_af.shape)
     elif input_af.shape and input_af.path and input_af.data_type and not input_af.geotransform:
-        return 'Numdal ArrayFrame with array set. ' + input_af.path + ' Shape: ' + str(input_af.shape) + ' Datatype: ' + str(input_af.data_type)
+        return 'Hazelbean ArrayFrame with array set. ' + input_af.path + ' Shape: ' + str(input_af.shape) + ' Datatype: ' + str(input_af.data_type)
 
     elif not os.path.exists(input_af.path):
         raise NameError('AF pointing to ' + str(input_af.path) + ' used as if the raster existed, but it does not. This often happens if tried to load an AF from a path that does not exist.')
 
     else:
         if input_af.data_loaded:
-            return '\nNumdal ArrayFrame (data loaded) at ' + input_af.path + \
+            return '\nHazelbean ArrayFrame (data loaded) at ' + input_af.path + \
                    '\n      Shape: ' + str(input_af.shape) + \
                    '\n      Datatype: ' + str(input_af.data_type) + \
                    '\n      No-Data Value: ' + str(input_af.ndv) + \
@@ -198,7 +198,7 @@ def describe_af(input_af):
                    '\n      ' + str(hb.pp(input_af.data, return_as_string=True)) + \
                    '\n      Histogram ' + hb.pp(hb.enumerate_array_as_histogram(input_af.data), return_as_string=True) + '\n\n'
         else:
-            return '\nNumdal ArrayFrame (data not loaded) at ' + input_af.path + \
+            return '\nHazelbean ArrayFrame (data not loaded) at ' + input_af.path + \
                    '\n      Shape: ' + str(input_af.shape) + \
                    '\n      Datatype: ' + str(input_af.data_type) + \
                    '\n      No-Data Value: ' + str(input_af.ndv) + \
@@ -285,26 +285,81 @@ def str_to_bool(input):
     return str(input).lower() in ("yes", "true", "t", "1", "y")
 
 
-def normalize_array(array, low=0, high=1, log_transform=True, **kwargs):
+def normalize_array(array, low=0, high=1, min_override=None, max_override=None, ndv=None, log_transform=True):
+    """Returns array with range (0, 1]
+    Log is only defined for x > 0, thus we subtract the minimum value and then add 1 to ensure 1 is the lowest value present. """
+    array = array.astype(np.float64)
+    if ndv is not None: # Slightly slower computation if has ndv. optimization here to only consider ndvs if given.
+        if log_transform:
+            min = np.min(array[array != ndv])
+            to_add = np.float64(min * -1.0 + 1.0) # This is just to subtract out the min and then add 1 because can't log zero
+            array = np.where(array != ndv, np.log(array + to_add), ndv)
 
-    if log_transform:
-        min = np.min(array)
-        max = np.max(array)
-        to_add = float(min * -1.0 + 1.0)
-        array = array + to_add
+        # Have to do again to get new min after logging.
+        if min_override is None:
+            print('array[array != ndv]', array, array[array != ndv], array.shape)
 
-        array = np.log(array)
+            min = np.min(array[array != ndv])
+        else:
+            min = min_override
 
-    min = np.min(array)
-    max = np.max(array)
+        if max_override is None:
+            max = np.max(array[array != ndv])
+        else:
+            max = max_override
 
-    normalizer = (high - low) / (max - min)
+        print(high, low, max, min)
+        normalizer = np.float64((high - low) / (max - min))
 
-    output_array = (array - min) *  normalizer
+        output_array = np.where(array != ndv, (array - min) * normalizer, ndv)
+    else:
+        if log_transform:
+            min = np.min(array)
+            to_add = np.float64(min * -1.0 + 1.0)
+            array = array + to_add
+
+            array = np.log(array)
+
+        # Have to do again to get new min after logging.
+        if min_override is None:
+            min = np.min(array[array != ndv])
+        else:
+            min = min_override
+
+        if max_override is None:
+            max = np.max(array[array != ndv])
+        else:
+            max = max_override
+        normalizer = np.float64((high - low) / (max - min))
+
+        output_array = (array - min) *  normalizer
 
     return output_array
 
 
+def get_ndv_from_path(intput_path):
+    """Return nodata value from first band in gdal dataset cast as numpy datatype.
+
+    Args:
+        dataset_uri (string): a uri to a gdal dataset
+
+    Returns:
+        nodata: nodata value for dataset band 1
+    """
+    dataset = gdal.Open(intput_path)
+    band = dataset.GetRasterBand(1)
+    nodata = band.GetNoDataValue()
+    if nodata is not None:
+        nodata_out = nodata
+    else:
+        # warnings.warn(
+        #     "Warning the nodata value in %s is not set", dataset_uri)
+        nodata_out = None
+
+    band = None
+    gdal.Dataset.__swig_destroy__(dataset)
+    dataset = None
+    return nodata_out
 
 def get_nodata_from_uri(dataset_uri):
     """Return nodata value from first band in gdal dataset cast as numpy datatype.
@@ -315,6 +370,8 @@ def get_nodata_from_uri(dataset_uri):
     Returns:
         nodata: nodata value for dataset band 1
     """
+
+    warnings.warn('get_nodata_from_uri deprecated for get_ndv_from_path ')
     dataset = gdal.Open(dataset_uri)
     band = dataset.GetRasterBand(1)
     nodata = band.GetNoDataValue()
@@ -331,5 +388,21 @@ def get_nodata_from_uri(dataset_uri):
     return nodata_out
 
 
+# Make a non line breaking printer for updates.
+def pdot(pre=None, post=None):
+    to_dot = '.'
+    if pre:
+        to_dot = str(pre) + to_dot
+    if post:
+        to_dot = to_dot + str(post)
+    sys.stdout.write(to_dot)
 
-
+def parse_input_flex(input_flex):
+    if isinstance(input_flex, str):
+        output = hb.ArrayFrame(input_flex)
+    elif isinstance(input_flex, np.ndarray):
+        print('parse_input_flex is NYI for arrays because i first need to figure out how to have an af without georeferencing.')
+        # output = hb.create_af_from_array(input_flex)
+    else:
+        output = input_flex
+    return output

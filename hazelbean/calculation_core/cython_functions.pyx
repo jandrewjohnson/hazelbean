@@ -11,6 +11,8 @@ from cython.parallel cimport prange
 import cython
 cimport cython
 
+from osgeo import gdal, osr, ogr
+
 # NOTE, both imports are required. cimport adds extra information to the pyd while the import actually defines numppy
 import numpy as np
 cimport numpy as np
@@ -32,7 +34,7 @@ ctypedef np.int_t DTYPEINT_t
 ctypedef np.int64_t DTYPEINT64_t
 ctypedef np.float32_t DTYPEFLOAT32_t
 ctypedef np.float64_t DTYPEFLOAT64_t
- 
+
 from libc.stdlib cimport rand
 cdef extern from "limits.h":
     int INT_MAX
@@ -142,6 +144,7 @@ cdef extern from "math.h" nogil:
 
 @cython.boundscheck(False)
 def reclassify_int_array_by_dict_to_ints(np.ndarray[DTYPEINT_t, ndim=2] input_array, dict rules):
+    # print('types', type(input_array), type(rules))
     cdef int r, c
     cdef int n_rows = input_array.shape[0]
     cdef int n_cols = input_array.shape[1]
@@ -212,22 +215,21 @@ def reclassify_float_array_by_dict_to_floats(np.ndarray[DTYPEFLOAT32_t, ndim=2] 
 
     return output_array
 
-
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef long long[::, ::1] memory_view_reclassify_int_array_by_dict_to_ints(long long[::, ::1] input_array, dict rules):
-    print('memory_view_reclassify_int_array_by_dict_to_ints')
-    cdef size_t n_rows = input_array.shape[0]
-    cdef size_t n_cols = input_array.shape[1]
-    print('rules', rules)
-    print('n_rows, n_cols', n_rows, n_cols)
-    cdef long long[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEINT64)
+def reclassify_float64_array_by_dict_to_float64(np.ndarray[DTYPEFLOAT64_t, ndim=2] input_array, dict rules):
+    cdef int r, c
+    cdef int n_rows = input_array.shape[0]
+    cdef int n_cols = input_array.shape[1]
+
+    cdef np.ndarray[DTYPEFLOAT64_t, ndim=2] output_array = np.empty([n_rows, n_cols], dtype=DTYPEFLOAT64)
 
     for r in range(n_rows):
         for c in range(n_cols):
-            if input_array[r,c] in rules:
-                output_array[r,c] = rules[input_array[r,c]]
+            value = input_array[r,c]
+            if value in rules:
+                output_array[r,c] = rules[value]
             else:
                 output_array[r,c] = input_array[r,c]
 
@@ -237,36 +239,22 @@ cpdef long long[::, ::1] memory_view_reclassify_int_array_by_dict_to_ints(long l
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef double[::, ::1] memory_view_reclassify_int_array_by_dict_to_floats(long long[::, ::1] input_array, dict rules):
-    print('memory_view_reclassify_int_array_by_dict_to_floats')
-    cdef size_t n_rows = input_array.shape[0]
-    cdef size_t n_cols = input_array.shape[1]
-    cdef double[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEFLOAT64)
-
-    for r in range(n_rows):
-        for c in range(n_cols):
-            if input_array[r,c] in rules:
-                output_array[r,c] = rules[input_array[r,c]]
-            else:
-                output_array[r,c] = input_array[r,c]
-
-    return output_array
-
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-cpdef long long[::, ::1] memory_view_reclassify_float_array_by_dict_to_ints(double[::, ::1] input_array, dict rules):
+cpdef long long[::, ::1] memory_view_reclassify_int_array_by_dict_to_ints(long long[::, ::1] input_array, dict rules, str not_in_dict_behavior='zero'):
     cdef size_t n_rows = input_array.shape[0]
     cdef size_t n_cols = input_array.shape[1]
     cdef long long[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEINT64)
 
+    if not_in_dict_behavior == 'ignore':
+        output_array = np.copy(input_array).astype(DTYPEINT64)
+    elif not_in_dict_behavior == 'zero':
+        output_array = np.zeros((n_rows, n_cols)).astype(DTYPEINT64)
+
     for r in range(n_rows):
         for c in range(n_cols):
             if input_array[r,c] in rules:
                 output_array[r,c] = rules[input_array[r,c]]
-            else:
-                output_array[r,c] = <long long>input_array[r,c]
+            # else:
+            #     output_array[r,c] = input_array[r,c]
 
     return output_array
 
@@ -274,24 +262,77 @@ cpdef long long[::, ::1] memory_view_reclassify_float_array_by_dict_to_ints(doub
 @cython.cdivision(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef double[::, ::1] memory_view_reclassify_float_array_by_dict_to_floats(double[::, ::1] input_array, dict rules):
-    print(memory_view_reclassify_float_array_by_dict_to_floats)
+cpdef double[::, ::1] memory_view_reclassify_int_array_by_dict_to_floats(long long[::, ::1] input_array, dict rules, str not_in_dict_behavior='zero'):
+    cdef size_t n_rows = input_array.shape[0]
+    cdef size_t n_cols = input_array.shape[1]
+
+    cdef double[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEFLOAT64)
+
+    if not_in_dict_behavior == 'ignore':
+        output_array = np.copy(input_array).astype(DTYPEFLOAT64)
+    elif not_in_dict_behavior == 'zero':
+        output_array = np.zeros((n_rows, n_cols)).astype(DTYPEFLOAT64)
+
+    for r in range(n_rows):
+        for c in range(n_cols):
+            if input_array[r,c] in rules:
+                output_array[r,c] = rules[input_array[r,c]]
+            # else:
+            #     output_array[r, c] = 0.0
+                # output_array[r,c] = input_array[r,c] # NOTE OPTIMIZATION IN THIS ONE COMPARED TO OTHERS, replicate
+
+    return output_array
 
 
-    for k, v in rules.items():
-        print(k, v)
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef long long[::, ::1] memory_view_reclassify_float_array_by_dict_to_ints(double[::, ::1] input_array, dict rules, str not_in_dict_behavior='zero'):
+    cdef size_t n_rows = input_array.shape[0]
+    cdef size_t n_cols = input_array.shape[1]
+    cdef long long[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEINT64)
+
+    if not_in_dict_behavior == 'ignore':
+        output_array = np.copy(input_array).astype(DTYPEINT64)
+    elif not_in_dict_behavior == 'zero':
+        output_array = np.zeros(input_array.shape).astype(DTYPEINT64)
+
+    for r in range(n_rows):
+        for c in range(n_cols):
+            if input_array[r,c] in rules:
+                output_array[r,c] = rules[input_array[r,c]]
+            # else:
+            #     output_array[r, c] = 0
+                # output_array[r,c] = <long long>input_array[r,c]
+
+    return output_array
+
+
+@cython.cdivision(True)
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef double[::, ::1] memory_view_reclassify_float_array_by_dict_to_floats(double[::, ::1] input_array, dict rules, str not_in_dict_behavior='zero'):
+    # for k, v in rules.items():
+    #     print(k, v)
     cdef size_t n_rows = input_array.shape[0]
     cdef size_t n_cols = input_array.shape[1]
     cdef double[::, ::1] output_array = np.empty([n_rows, n_cols], dtype=DTYPEFLOAT64)
 
+    if not_in_dict_behavior == 'ignore':
+        output_array = np.copy(input_array).astype(DTYPEFLOAT64)
+    elif not_in_dict_behavior == 'zero':
+        output_array = np.zeros((n_rows, n_cols)).astype(DTYPEFLOAT64)
+
     for r in range(n_rows):
-        print('row', r)
+        # print('row', r)
         for c in range(n_cols):
             if input_array[r,c] in rules:
+                # print('rules[input_array[r,c]]', input_array[r, c], rules[input_array[r, c]])
                 output_array[r,c] = rules[input_array[r,c]]
-            else:
-                output_array[r,c] = input_array[r,c]
-
+            # else:
+            #     output_array[r, c] = 0.0
+                # output_array[r,c] = input_array[r,c]
+    # print('output_array', np.nansum(output_array))
     return output_array
 
 
@@ -1014,272 +1055,127 @@ def allocate_from_sorted_keys_with_eligibility_mask(ndarray[DTYPEINT64_t, ndim=2
 
     return allocations
 
-def zonal_stats_on_two_arrays_floating_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
-                                              ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
-                                              DTYPEINT64_t zones_ndv,
-                                              DTYPEFLOAT64_t values_ndv,
-                                              ):
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
-
-    if n_rows != zones_array.shape[0] or n_cols != zones_array.shape[1]:
-        raise NameError('Arrays given to zonal_stats_on_two_arrays_floating_values were not the same sized. Instead, they were zones_array: ' + str(zones_array.shape[0]) + ' ' + str(zones_array.shape[1]) + ' values_array: ' + str(values_array.shape[0]) + ' ' + str(values_array.shape[1]))
-
-    # Identify up to 10000 unique zones from the raster
-    cdef np.ndarray[np.int64_t, ndim=1] unique_ids = np.zeros(10000, dtype=np.int64)
-    unique_ids = np.unique(zones_array).astype(np.int64)
-
-    cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float64)
-    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
-
-    for i in range(n_rows):
-        if i % 1000 == 0:
-            print(str((float(i) / float(n_rows)) * 100) + ' percent complete for zonal_stats_on_two_arrays_floating_values().')
-        for j in range(n_cols):
-            if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                sums[zones_array[i, j]] += values_array[i, j]
-                counts[zones_array[i, j]] += 1
-    return unique_ids, sums, counts
-
-def zonal_stats_on_two_arrays_floating_values_32bit(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                                    ndarray[DTYPEFLOAT32_t, ndim=2] values_array not None,
-                                                    DTYPEINT_t zones_ndv,
-                                                    DTYPEFLOAT32_t values_ndv,
-                                                    ):
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
-    cdef double total_52_allocation = 0
-    if n_rows != zones_array.shape[0] or n_cols != zones_array.shape[1]:
-        raise NameError('Arrays given to zonal_stats_on_two_arrays_floating_values were not the same sized. Instead, they were zones_array: ' + str(zones_array.shape[0]) + ' ' + str(zones_array.shape[1]) + ' values_array: ' + str(values_array.shape[0]) + ' ' + str(values_array.shape[1]))
-
-    # Identify up to 10000 unique zones from the raster
-    cdef np.ndarray[np.int_t, ndim=1] unique_ids = np.zeros(10000, dtype=np.int)
-    unique_ids = np.unique(zones_array).astype(np.int)
-
-    cdef np.ndarray[np.float32_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float32)
-    cdef np.ndarray[np.int_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int)
-
-    for i in range(n_rows):
-        # if i%1000 == 0:
-        #     print(str((float(i) / float(n_rows)) * 100) + ' percent complete for zonal_stats_on_two_arrays_floating_values().')
-        for j in range(n_cols):
-            # if i%1234 == 0 and j%1233 == 0:
-            #     print(i, j, values_array[i, j], zones_array[i, j])
-            if zones_array[i, j] == 52:
-                print(i, j, values_array[i, j], zones_array[i, j])
-            if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                if zones_array[i, j] == 52:
-                    total_52_allocation += values_array[i, j]
-                    print('INSIDE', total_52_allocation, i, j, values_array[i, j], zones_array[i, j])
-
-                sums[zones_array[i, j]] += values_array[i, j]
-                counts[zones_array[i, j]] += 1
-            # else:
-            # print('NDV HIT', i, j, values_array[i, j])
-    return unique_ids, sums, counts
 
 @cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def zonal_statistics_rasterized_new(ndarray[DTYPEFLOAT64_t, ndim=2] zones_array not None,
-                                    ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
-                                    DTYPEFLOAT64_t zones_ndv,
-                                    DTYPEFLOAT64_t values_ndv, ):
-    cdef np.ndarray[np.float64_t, ndim=1] unique_ids = np.unique(zones_array).astype(np.float64)
-    cdef long long n_unique_ids = len(unique_ids)
-    cdef long long i, j
-    cdef long long n_rows = values_array.shape[0]
-    cdef long long n_cols = values_array.shape[1]
-    cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(n_unique_ids, dtype=np.float64)
-    cdef np.ndarray[np.float64_t, ndim=1] counts = np.zeros(n_unique_ids, dtype=np.float64)
-
-    # Correct for cases where there are not sequential IDs
-    cdef np.ndarray[np.int64_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int64)
-    for counter, value in enumerate(unique_ids):
-        new_value = <int> (value)
-        new_counter = np.int64(counter)
-        print('new_value', new_value, type(new_value))
-        position_of_zone_from_zone_id[new_value] = counter
-
-    for i in range(n_rows):
-        if i % 500 == 0:
-            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
-        for j in range(n_cols):
-            if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <double> (1)  # Possibly unneeded recast
-
-@cython.cdivision(True)
-@cython.boundscheck(False)
+@cython.boundscheck(True)
 @cython.wraparound(False)
 def zonal_stats_64bit_float_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
                                    ndarray[DTYPEFLOAT64_t, ndim=2] values_array not None,
                                    DTYPEINT64_t zones_ndv,
                                    DTYPEFLOAT64_t values_ndv,
+
                                    ):
     cdef long long i, j
     cdef long long n_rows = values_array.shape[0]
     cdef long long n_cols = values_array.shape[1]
 
-    cdef double running_sum = 0
+    # Optimization: have user optionally provide unique_ids so its not calculated again
+    # cdef long long num_ids
 
-    # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
-    cdef long long num_ids
-    unique_ids_pre = np.unique(zones_array).astype(np.int64)  # This INT64 was required so that np.zeros got the
-    num_ids = unique_ids_pre.size
-    print('num_ids', num_ids)
-    cdef np.ndarray[np.int64_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int64)
-    unique_ids = unique_ids_pre
+    # Check optimization, would this have been faster if used with CDEF like :
+    # cdef np.ndarray[np.int64_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1] unique_ids_unpadded = np.unique(zones_array).astype(np.int64)  # This INT64 was required so that np.zeros got the
+    cdef long long max_id = np.max(unique_ids_unpadded).astype(np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1] unique_ids = np.arange(0, max_id + 1).astype(np.int64)  # This INT64 was required so that np.zeros got the
 
-    cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float64)
-    cdef np.ndarray[np.float64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.float64)
 
-    # Correct for cases where there are not sequential IDs
-    cdef np.ndarray[np.int64_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int64)
-    cdef long long counter
-    cdef double value
-    cdef int new_value
-    for counter, value in enumerate(unique_ids):
-        print('value', value, type(value))
-        new_value = <int> (value)
-        new_counter = np.int64(counter)
-        print('new_value', new_value, type(new_value))
-        position_of_zone_from_zone_id[new_value] = counter
+    cdef np.ndarray[np.float64_t, ndim=1] sums = np.zeros(max_id, dtype=np.float64)
+    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(max_id, dtype=np.int64)
+
 
     for i in range(n_rows):
-        if i % 500 == 0:
+        if i + 1 % 5000 == 0:
             print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
             if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                running_sum += values_array[i, j]
-
-                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <double> (1)  # Possibly unneeded recast
+                sums[zones_array[i, j]] += values_array[i, j]
+                counts[zones_array[i, j]] += np.int64(1)
 
     return unique_ids, sums, counts
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
+@cython.cdivision(False)
+@cython.boundscheck(True)
 @cython.wraparound(False)
-def zonal_stats_32bit_float_values(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                   ndarray[DTYPEFLOAT32_t, ndim=2] values_array not None,
-                                   DTYPEINT_t zones_ndv,
-                                   DTYPEFLOAT32_t values_ndv,
-                                   ):
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
+def zonal_stats_cythonized_iterblocks(str zone_ids_raster_path,
+                                       str values_raster_path,
+                                       np.int64_t[::1] unique_zone_ids not None,
+                                       DTYPEINT64_t zones_ndv,
+                                       DTYPEFLOAT64_t values_ndv,
 
-    # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
-    cdef long long num_ids
-    unique_ids_pre = np.unique(zones_array).astype(np.int32)
-    num_ids = unique_ids_pre.size
-    cdef np.ndarray[np.int32_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int32)
-    unique_ids = unique_ids_pre
+                                        stats=None
+                                       ):
+    if stats is None:
+        stats = ['sum', 'count']
 
-    cdef np.ndarray[np.float32_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.float32)
-    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
+    zones_ds = gdal.OpenEx(zone_ids_raster_path)
+    cdef np.int64_t[::, ::1] zones_array = zones_ds.ReadAsArray().astype(np.int64)
 
-    # Correct for cases where there are not sequential IDs
-    cdef np.ndarray[np.int32_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int32)
-    cdef int counter
-    cdef int value
-    for counter, value in enumerate(unique_ids):
-        position_of_zone_from_zone_id[value] = counter
+    values_ds = gdal.OpenEx(values_raster_path)
+    cdef np.float64_t[::, ::1] values_array = values_ds.ReadAsArray().astype(np.float64)
+
+    # Iterate through input array applying stats logic
+    cdef long long i, j, z
+    cdef double v
+    cdef long long n_rows = values_array.shape[0]
+    cdef long long n_cols = values_array.shape[1]
+
+    # cdef long long max_id = np.max(unique_zone_ids).astype(np.int64)
+
+
+    cdef np.float64_t[::1] sums = np.zeros(len(unique_zone_ids), dtype=np.float64)
+    cdef np.int64_t[::1] counts = np.zeros(len(unique_zone_ids), dtype=np.int64)
 
     for i in range(n_rows):
-        if i % 500 == 0:
-            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
+        if i % 1000 == 0:
+            if i > 0:
+                print('zonal_stats_cythonized_iterblocks ' + str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
-            if values_array[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
+            # PERFORMANCE NOTE: assigning once and then using the values was sigficantly faster.
+            v = values_array[i, j]
+            z = zones_array[i, j]
+            if v != values_ndv and z != zones_ndv:
+                sums[z] += v
+                counts[z] += 1
 
-    return unique_ids, sums, counts
+    return unique_zone_ids, sums, counts
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def zonal_stats_32bit_int_values(ndarray[DTYPEINT_t, ndim=2] zones_array not None,
-                                 ndarray[DTYPEINT_t, ndim=2] values_array not None,
-                                 DTYPEINT_t zones_ndv,
-                                 DTYPEINT_t values_ndv,
-                                 ):
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
+def zonal_stats_cythonized_iterblocks_from_arrays(np.int64_t[::,::1] zones_array not None,
+                                                  np.float64_t[::,::1] values_array not None,
+                                                  np.int64_t[::1] unique_zone_ids not None,
+                                                  DTYPEINT64_t zones_ndv,
+                                                  DTYPEFLOAT64_t values_ndv,
+                                                  ):
 
-    # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
-    cdef long long num_ids
-    unique_ids_pre = np.unique(zones_array).astype(np.int32)
-    num_ids = unique_ids_pre.size
-    cdef np.ndarray[np.int32_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int32)
-    unique_ids = unique_ids_pre
 
-    cdef np.ndarray[np.int64_t, ndim=1] values_array_64 = np.copy(values_array).astype(np.int64)
+    # Iterate through input array applying stats logic
+    cdef long long i, j, z
+    cdef double v
+    cdef long long n_rows = values_array.shape[0]
+    cdef long long n_cols = values_array.shape[1]
 
-    cdef np.ndarray[np.int64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.int64)
-    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
+    cdef long long max_id = np.max(unique_zone_ids).astype(np.int64)
 
-    # Correct for cases where there are not sequential IDs
-    cdef np.ndarray[np.int32_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int32)
-    cdef int counter
-    cdef int value
-    for counter, value in enumerate(unique_ids):
-        position_of_zone_from_zone_id[value] = counter
+    cdef np.float64_t[::1] sums = np.zeros(max_id + 1, dtype=np.float64)
+    cdef np.int64_t[::1] counts = np.zeros(max_id + 1, dtype=np.int64)
 
     for i in range(n_rows):
-        if i % 500 == 0:
-            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
+        if i % 1000 == 0:
+            if i > 0:
+                print('zonal_stats_cythonized_iterblocks ' + str((float(i) / float(n_rows)) * 100) + ' percent complete.')
         for j in range(n_cols):
-            if values_array_64[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
+            # PERFORMANCE NOTE: assigning once and then using the values was sigficantly faster.
+            v = values_array[i, j]
+            z = zones_array[i, j]
+            if v != values_ndv and z != zones_ndv and not np.isnan(v):
 
-    return unique_ids, sums, counts
+                sums[z] += v
+                counts[z] += 1
 
-@cython.cdivision(True)
-@cython.boundscheck(False)
-@cython.wraparound(False)
-def zonal_stats_64bit_int_values(ndarray[DTYPEINT64_t, ndim=2] zones_array not None,
-                                 ndarray[DTYPEINT64_t, ndim=2] values_array not None,
-                                 DTYPEINT64_t zones_ndv,
-                                 DTYPEINT64_t values_ndv,
-                                 ):
-    cdef int i, j
-    cdef int n_rows = values_array.shape[0]
-    cdef int n_cols = values_array.shape[1]
+    zones_ds = None
+    values_ds = None
 
-    # Somewhat convoluted way to load unique IDs of the right length while still usind cdef. Not sure of performance increase.
-    cdef long long num_ids
-    unique_ids_pre = np.unique(zones_array).astype(np.int32)
-    num_ids = unique_ids_pre.size
-    cdef np.ndarray[np.int32_t, ndim=1] unique_ids = np.zeros(num_ids, dtype=np.int32)
-    unique_ids = unique_ids_pre
 
-    cdef np.ndarray[np.int64_t, ndim=1] values_array_64 = np.copy(values_array).astype(np.int64)
-
-    cdef np.ndarray[np.int64_t, ndim=1] sums = np.zeros(len(unique_ids), dtype=np.int64)
-    cdef np.ndarray[np.int64_t, ndim=1] counts = np.zeros(len(unique_ids), dtype=np.int64)
-
-    # Correct for cases where there are not sequential IDs
-    cdef np.ndarray[np.int32_t, ndim=1] position_of_zone_from_zone_id = np.zeros(len(unique_ids), dtype=np.int32)
-    cdef int counter
-    cdef int value
-    for counter, value in enumerate(unique_ids):
-        position_of_zone_from_zone_id[value] = counter
-
-    for i in range(n_rows):
-        if i % 500 == 0:
-            print(str((float(i) / float(n_rows)) * 100) + ' percent complete.')
-        for j in range(n_cols):
-            if values_array_64[i, j] != values_ndv and zones_array[i, j] != zones_ndv:
-                sums[position_of_zone_from_zone_id[zones_array[i, j]]] += values_array[i, j]
-                counts[position_of_zone_from_zone_id[zones_array[i, j]]] += <long long> (1)
-
-    return unique_ids, sums, counts
+    return unique_zone_ids, sums, counts
 
 @cython.cdivision(True)
 @cython.boundscheck(False)

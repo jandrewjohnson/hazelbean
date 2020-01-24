@@ -15,7 +15,7 @@ import warnings
 import stat
 L = hb.get_logger('os_utils')
 
-def make_run_dir(base_folder=hb.config.TEMPORARY_DIR, run_name='', just_return_string=False):
+def make_run_dir(base_folder=hb.globals.TEMPORARY_DIR, run_name='', just_return_string=False):
     """Create a directory in a preconfigured location. Does not delete by default. Returns path of dir."""
     run_dir = os.path.join(base_folder, ruri(run_name))
     if not os.path.exists(run_dir):
@@ -41,6 +41,7 @@ def make_run_dir(base_folder=hb.config.TEMPORARY_DIR, run_name='', just_return_s
 
 
 def temp(ext=None, filename_start=None, remove_at_exit=False, folder=None, suffix=''):
+    """Create a path with extension ext in a temporary dir. Can add filename prefixes or suffixes, and place in a desired folder. Can be removed at exit automatically."""
     if ext:
         if not ext.startswith('.'):
             ext = '.' + ext
@@ -59,14 +60,14 @@ def temp(ext=None, filename_start=None, remove_at_exit=False, folder=None, suffi
     if folder is not None:
         uri = os.path.join(folder, filename)
     else:
-        uri = os.path.join(hb.config.TEMPORARY_DIR, filename)
+        uri = os.path.join(hb.globals.TEMPORARY_DIR, filename)
 
     if remove_at_exit:
         remove_uri_at_exit(uri)
 
     return uri
 
-
+# TODOO Get rid of convenience duplications?
 def temp_filename(ext=None, filename_start=None, remove_at_exit=True, folder=None, suffix=''):
     return temp(ext=ext, filename_start=filename_start, remove_at_exit=remove_at_exit, folder=folder, suffix=suffix)
 
@@ -88,9 +89,9 @@ def temporary_dir(dirname_prefix=None, dirname_suffix=None, remove_at_exit=True)
     if dirname_prefix:
         pre_post_string = dirname_prefix + '_' + pre_post_string
     if dirname_suffix:
-        pre_post_string += '_' + dir_suffix
+        pre_post_string += '_' + dirname_suffix
 
-    path = os.path.join(hb.config.TEMPORARY_DIR, ruri(pre_post_string))
+    path = os.path.join(hb.globals.TEMPORARY_DIR, ruri(pre_post_string))
     if os.path.exists(path):
         raise FileExistsError()
     else:
@@ -106,28 +107,6 @@ def temporary_dir(dirname_prefix=None, dirname_suffix=None, remove_at_exit=True)
 
     return path
 
-
-def temporary_folder():
-    """
-    Returns a temporary folder using mkdtemp.  The folder is deleted on exit
-    using the atexit register.
-
-    Returns:
-        path (string): an absolute, unique and temporary folder path.
-
-    """
-    warnings.warn('Deprecated for DIR method.')
-    path = tempfile.mkdtemp()
-
-    def remove_folder(path):
-        """Function to remove a folder and handle exceptions encountered.  This
-        function will be registered in atexit."""
-        shutil.rmtree(path, ignore_errors=True)
-
-    atexit.register(remove_folder, path)
-    return path
-
-
 def quad_split_path(input_uri):
     '''
     Splits a path into prior directories path, parent directory, basename (extensionless filename), file extension.
@@ -137,6 +116,7 @@ def quad_split_path(input_uri):
     b, file_root = os.path.split(a)
     prior_path, parent_directory = os.path.split(b)
 
+    # TODOO Confusing? Parent directry is cur_dir, no? What happens when you give it a dir?
     return [prior_path, parent_directory, file_root, file_extension]
 
 
@@ -149,21 +129,21 @@ def random_numerals_string(length=6):
 
 def random_lowercase_string(length=6):
     """Returns randomly chosen, lowercase characters as a string with given length. Uses chr(int) to convert random."""
-    random_ints = [random.randint(hb.config.start_of_lowercase_letters_ascii_int, hb.config.start_of_lowercase_letters_ascii_int + 26)  for i in range(length)]
+    random_ints = [random.randint(hb.globals.start_of_lowercase_letters_ascii_int, hb.globals.start_of_lowercase_letters_ascii_int + 26)  for i in range(length)]
     random_chars = [chr(i) for i in random_ints]
     return ''.join(random_chars)
 
 def random_alphanumeric_string(length=6):
     """Returns randomly chosen, lowercase characters as a string with given length. Uses chr(int) to convert random."""
-    random_chars = [random.choice(hb.config.alphanumeric_lowercase_ascii_symbols) for i in range(length)]
+    random_chars = [random.choice(hb.globals.alphanumeric_lowercase_ascii_symbols) for i in range(length)]
 
     return ''.join(random_chars)
 
 
 def convert_string_to_implied_type(input_string):
-    if input_string in ['TRUE', 'True', 'true', 'T', 't']:
+    if input_string in ['TRUE', 'True', 'true', 'T', 't', '1']:
         return True
-    if input_string in ['FALSE', 'False', 'false', 'F', 'f']:
+    if input_string in ['FALSE', 'False', 'false', 'F', 'f', '0']:
         return False
 
     try:
@@ -176,7 +156,7 @@ def convert_string_to_implied_type(input_string):
     except:
         inted = False
 
-    if '.'  in input_string and floated:
+    if '.' in input_string and floated:
         return floated
 
     if inted:
@@ -489,12 +469,16 @@ def insert_string_before_ext(input_uri, input_string):
 
     # split_uri = os.path.splitext(input_uri)
     # return os.path.join(split_uri[0] + '_' + str(input_string) + split_uri[1])
-    split_uri = os.path.splitext(input_uri)
-    if split_uri[1]:
-        output_uri = split_uri[0] + '_' + str(input_string) + split_uri[1]
+
+    if input_string:
+        split_uri = os.path.splitext(input_uri)
+        if split_uri[1]:
+            output_uri = split_uri[0] + '_' + str(input_string) + split_uri[1]
+        else:
+            output_uri = split_uri[0] + str(input_string)
+        return output_uri
     else:
-        output_uri = split_uri[0] + str(input_string)
-    return output_uri
+        return input_uri
 
 
 def ruri(input_uri):
@@ -540,6 +524,8 @@ def create_dirs(list_of_folders):
             raise NameError('create_dirs() failed to make ' + folder)
 
 def remove_dirs(list_of_folders, safety_check=''):
+    if isinstance(list_of_folders, str):
+        list_of_folders = [list_of_folders]
     if safety_check == 'delete':
         if list_of_folders is str:
             list_of_folders = list(list_of_folders)
@@ -559,7 +545,7 @@ def remove_dirs(list_of_folders, safety_check=''):
 def execute_2to3_on_folder(input_folder, do_write=False):
     python_files = hb.list_filtered_paths_recursively(input_folder, include_extensions='.py')
 
-    print ('execute_2to3_on_folder found ' + python_files)
+    print ('execute_2to3_on_folder found ' + str(python_files))
 
     for file in python_files:
         if do_write:
@@ -623,8 +609,22 @@ def list_filtered_dirs_recursively(input_dir, include_strings=None, depth=9999):
                 output_dirs.append(dir_)
     return output_dirs
 
+def get_size_of_list_of_file_paths(input_list):
+    """Return an ordered dict (no longer OrderedDict from collections cause dicts are not ordered as of 3.6)
+     with path-name as key and filesize as value. Return None if file not found."""
+
+    sizes = {}
+    for path in input_list:
+        try:
+            size = os.stat(path).st_size
+            sizes[path] = size
+        except:
+            sizes[path] = None
+
+    return sizes
 
 
+# TODOO Collapse this with recursive?
 def list_filtered_paths_nonrecursively(input_folder, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False):
     # NOTE: the filter strings can be anywhere in the path, not just the filename.
 
@@ -916,7 +916,7 @@ def list_filtered_paths_recursively(input_folder, include_strings=None, include_
 
 
 
-
+# TODOO get rid of all uris
 def unzip_file(input_uri, output_folder=None, verbose=True):
     'Unzip file in place. If no output folder specified, place in input_uris folder'
     if not output_folder:
@@ -927,7 +927,7 @@ def unzip_file(input_uri, output_folder=None, verbose=True):
     z = zipfile.ZipFile(fh)
     for name in z.namelist():
         if verbose:
-            pp(name, output_folder)
+            hb.pp(name, output_folder)
         z.extract(name, output_folder)
     fh.close()
 
@@ -968,19 +968,23 @@ def copy_files_from_dir_by_filter(input_dir, dst_dir, include_strings=None, incl
 
 
 def copy_files_from_dir_by_filter_preserving_dir_structure(input_dir, dst_dir, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False):
+    print('possibly deprecated for copy_file_tree_to_new_root')
+
     if not os.path.exists(dst_dir):
-        try:
-            os.mkdir(dst_dir)
-        except:
-            'perhaps no dir was specified. using curdir'
+        print('asdf', os.path.abspath(dst_dir))
+        os.mkdir(dst_dir)
+        # try:
+        #     os.mkdir(dst_dir)
+        # except:
+        #     'perhaps no dir was specified. using curdir'
 
     for uri in hb.list_filtered_paths_recursively(input_dir, include_strings, include_extensions, exclude_strings, exclude_extensions, return_only_filenames):
         modified_uri = uri.replace(input_dir, dst_dir, 1)
-        try:
-            os.makedirs(os.path.split(modified_uri)[0])
-        except:
-            'exists?'
-        # os.makedirs(os.path.split(modified_uri)[0], exist_ok=True)
+        # try:
+        #     os.makedirs(os.path.split(modified_uri)[0])
+        # except:
+        #     'exists?'
+        os.makedirs(os.path.split(modified_uri)[0], exist_ok=True)
         shutil.copy(uri, modified_uri)
 
 def zip_files_from_dir_by_filter_preserving_dir_structure(input_dir, zip_dst_uri, include_strings=None, include_extensions=None, exclude_strings=None, exclude_extensions=None, return_only_filenames=False):
@@ -1083,7 +1087,10 @@ def list_files_in_dir_recursively(input_folder, filter_strings=None, filter_exte
                     files.append(os.path.join(current_folder, filename))
     return files
 
-def list_dirs_in_dir_recursively(input_folder, filter_strings=[], max_folders_analyzed=None, return_only_filenames=False):
+# TODOO Consider again removing this, noting that the list_files_in_dir seems more robust.
+def list_dirs_in_dir_recursively(input_folder, filter_strings=None, max_folders_analyzed=None, return_only_filenames=False):
+    if type(filter_strings) == str:
+        filter_strings = [filter_strings]
     if type(filter_strings) == str:
         filter_strings = [filter_strings]
 
@@ -1107,35 +1114,9 @@ def list_dirs_in_dir_recursively(input_folder, filter_strings=[], max_folders_an
             folders.append(current_folder)
     return folders
 
-
-def assert_file_existance(dataset_uri_list):
-    """Assert that provided uris exist in filesystem.
-
-    Verify that the uris passed in the argument exist on the filesystem
-    if not, raise an exeception indicating which files do not exist
-
-    Args:
-        dataset_uri_list (list): a list of relative or absolute file paths to
-            validate
-
-    Returns:
-        None
-
-    Raises:
-        IOError: if any files are not found
-    """
-    not_found_uris = []
-    for uri in dataset_uri_list:
-        if not os.path.exists(uri):
-            not_found_uris.append(uri)
-
-    if len(not_found_uris) != 0:
-        error_message = (
-            "The following files do not exist on the filesystem: " +
-            str(not_found_uris))
-        raise NameError(error_message)
-        # raise exceptions.IOError(error_message)
-
+def assert_file_existence(input_path):
+    if not os.path.exists(input_path):
+        raise FileNotFoundError('hb.assert_file_existence could not find ' + str(input_path))
 
 def swap_filenames(left_uri, right_uri):
     left_temp_uri = suri(left_uri, 'temp')
@@ -1145,7 +1126,7 @@ def swap_filenames(left_uri, right_uri):
 
 def displace_file(src_uri, to_displace_uri, displaced_uri=None, delete_original=False):
     if not displaced_uri:
-        displaced_uri = nd.rsuri(src_uri, 'displaced_by_' + explode_uri(src_uri)['file_root'])
+        displaced_uri = hb.rsuri(src_uri, 'displaced_by_' + explode_uri(src_uri)['file_root'])
     os.rename(to_displace_uri, displaced_uri)
     os.rename(src_uri, to_displace_uri)
 
@@ -1162,7 +1143,7 @@ def replace_file(src_uri, dst_uri, delete_original=True):
         if delete_original:
             os.remove(dst_uri)
         else:
-            os.rename(dst_uri, rsuri(new_location, 'replaced_by_' + src_uri))
+            os.rename(dst_uri, rsuri(hb.quad_split_path(dst_uri[2]), 'replaced_by_' + src_uri))
 
     try:
         os.rename(src_uri, dst_uri)
@@ -1227,7 +1208,7 @@ def remove_uri_at_exit(input):
     if isinstance(input, str):
         hb.config.uris_to_delete_at_exit.append(input)
     elif isinstance(input, hb.ArrayFrame):
-        hb.config.uris_to_delete_at_exit.append(input.uri)
+        hb.config.uris_to_delete_at_exit.append(input.path)
 
 
 def remove_path(path):
@@ -1263,11 +1244,7 @@ def remove_path(path):
 def remove_at_exit(uri):
     hb.config.uris_to_delete_at_exit.append(uri)
 
-
-if __name__=='__main__':
-    input_folder = 'C:\\OneDrive\\Projects\\numdal\\natcap'
-    # execute_2to3_on_folder(input_folder, do_write=True)
-
+# TODOO clarify when have path_<function name>. Should i make it a module?
 def path_rename_change_dir(input_path, new_dir):
     """Change the directory of a file given its input path, preserving the name. NOTE does not do anything to the file"""
     return os.path.join(new_dir, os.path.split(input_path)[1])
@@ -1280,11 +1257,56 @@ def file_root(input_path):
 def path_file_root(input_path):
     return os.path.splitext(os.path.split(input_path)[1])[0]
 
+def get_flex_as_path(input_flex, raise_file_exists_errors=True):
+    """Return a path-string from input_flex. If its an arrayframe it will just return the path attribute, while if its a string it will test for file existence."""
+    if isinstance(input_flex, str):
+        if os.path.exists(input_flex):
+            return input_flex
+        else:
+            if raise_file_exists_errors:
+                raise NameError('get_flex_as_path given ' + str(input_flex) + ' which was interpreted as a string-path but it doesnt exist in the file system.')
+            else:
+                return input_flex
+    elif isinstance(input_flex, hb.ArrayFrame):
+        return input_flex.path
+
+def copy_file_tree_to_new_root(input_dir, root_dir, **kwargs):
+    include_strings = kwargs.get('include_strings', None)
+    include_extensions = kwargs.get('include_extensions', None)
+    exclude_strings = kwargs.get('exclude_strings', None)
+    exclude_extensions = kwargs.get('exclude_extensions', None)
+    return_only_filenames = kwargs.get('return_only_filenames', False)
+    depth = kwargs.get('depth', 5000)
+    only_most_recent = kwargs.get('only_most_recent', False)
+
+    paths = hb.list_filtered_paths_recursively(input_dir,
+        include_strings=include_strings,
+        include_extensions=include_extensions,
+        exclude_strings=exclude_strings,
+        exclude_extensions=exclude_extensions,
+        return_only_filenames=return_only_filenames,
+        depth=depth,
+        only_most_recent=only_most_recent,
+    )
+
+    for cur_dir, dirs_in_dir, files_in_dir in os.walk(input_dir):
+        extra_dirs = cur_dir.replace(input_dir, '')
+        output_dir = root_dir + extra_dirs
+        for file in files_in_dir:
+            target_path = os.path.join(input_dir, cur_dir, file)
+            output_path = os.path.join(output_dir, file)
+
+            print('copying from ' + str(target_path) + ' to ' + str(output_path))
+
+            hb.copy_shutil_flex(target_path, output_path)
+
+
 
 
 def copy_shutil_flex(src, dst, copy_tree=True):
     """Helper util that allows copying of files or dirs in same function"""
     if os.path.isdir(src):
+        print(1)
         if not os.path.exists(dst):
             hb.create_directories(dst)
         if copy_tree:
@@ -1293,6 +1315,7 @@ def copy_shutil_flex(src, dst, copy_tree=True):
             dst = os.path.join(dst, os.path.basename(src))
             shutil.copyfile(src, dst)
     else:
+        print(2)
         dst_dir = os.path.split(dst)[0]
         if not os.path.exists(dst_dir):
             os.makedirs(dst_dir, exist_ok=True)
@@ -1350,6 +1373,9 @@ def exists(path):
         except:
             return False
 
-
+def write_to_file(input_object, output_path):
+    s = str(input_object)
+    with open(output_path, 'w') as fp:
+        fp.write(s)
 
 

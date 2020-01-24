@@ -4,26 +4,18 @@ from osgeo import gdal, ogr, osr
 import numpy as np
 
 import hazelbean as hb
-
+import functools
+from functools import reduce
 
 
 L = hb.get_logger('spatial_projection')
+
 def get_wkt_from_epsg_code(epsg_code):
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(int(epsg_code))
     wkt = srs.ExportToWkt()
 
     return wkt
-
-# class DatasetUnprojected(Exception):
-#     """An exception in case a dataset is unprojected"""
-#     pass
-#
-#
-# class DifferentProjections(Exception):
-#     """An exception in case a set of datasets are not in the same projection"""
-#     pass
-
 
 
 def get_datasource_srs_uri(dataset_uri):
@@ -32,8 +24,6 @@ def get_datasource_srs_uri(dataset_uri):
     layer = dataset.GetLayer()
     spatialRef = layer.GetSpatialRef()
     return spatialRef
-
-
 
 
 def get_dataset_projection_wkt_uri(dataset_uri):
@@ -83,6 +73,36 @@ def get_linear_unit_from_other_projection(input_uri, projected_uri, also_return_
         return resolution
 
 
+def get_area_of_pixel_from_center_lat(pixel_size, center_lat):
+    """Calculate m^2 area of a wgs84 square pixel.
+
+    Adapted from: https://gis.stackexchange.com/a/127327/2397
+
+    Parameters:
+        pixel_size (float): length of side of pixel in degrees.
+        center_lat (float): latitude of the center of the pixel. Note this
+            value +/- half the `pixel-size` must not exceed 90/-90 degrees
+            latitude or an invalid area will be calculated.
+
+    Returns:
+        Area of square pixel of side length `pixel_size` centered at
+        `center_lat` in m^2.
+
+    """
+    a = 6378137  # meters
+    b = 6356752.3142  # meters
+    e = math.sqrt(1 - (b / a) ** 2)
+    area_list = []
+    for f in [center_lat + pixel_size / 2, center_lat - pixel_size / 2]:
+        zm = 1 - e * math.sin(math.radians(f))
+        zp = 1 + e * math.sin(math.radians(f))
+        area_list.append(
+            math.pi * b ** 2 * (
+                    math.log(zp / zm) / (2 * e) +
+                    math.sin(math.radians(f)) / (zp * zm)))
+    return pixel_size / 360. * (area_list[0] - area_list[1])
+
+
 def calc_cylindrical_geotransform_from_array(input_array):
     """Assume the array is a global cylindrical geotiff. Calculate the geotransform that would make it such."""
 
@@ -90,10 +110,87 @@ def calc_cylindrical_geotransform_from_array(input_array):
     x_size = 360.0 / float(input_array.shape[1])
 
     if x_size != y_size:
-        print('Warning, x_size not same as y_size')
+        print ('Warning, x_size not same as y_size')
 
     geotransform = (-180.0, x_size, 0.0, 90.0, 0.0, -y_size)
     return geotransform
+
+def assert_gdal_paths_have_same_geotransform(input_paths_list, return_result=False):
+    if not isinstance(input_paths_list, list):
+        input_paths_list = [input_paths_list]
+    first_geotransform = hb.get_geotransform_uri(input_paths_list[0])
+    for path in input_paths_list[1:]:
+        geotransform = hb.get_geotransform_uri(path)
+        if geotransform == first_geotransform:
+            if return_result:
+                return True
+            else:
+                'we good'
+        else:
+            error_string = 'Two paths do not have the same geotransform, as found by assert_gdal_paths_in_same_projection. \n    ' + input_paths_list[0] + ': ' + str(first_geotransform) + '\n    ' + path + ': ' + str(geotransform)
+            if return_result:
+                L.critical(error_string)
+                return False
+            raise NameError(error_string)
+
+
+def assert_gdal_paths_in_same_projection(input_paths_list, return_result=False):
+    if not isinstance(input_paths_list, list):
+        input_paths_list = [input_paths_list]
+    first_srs = hb.get_gdal_srs_path(input_paths_list[0])
+    for path in input_paths_list[1:]:
+        # ext = os.path.splitext(path)[1]
+        # if ext in hb.common_gdal_readable_file_extensions:
+        #     info = hb.get_raster_info(path)
+        # elif ext in ['.shp']:
+        #     info = hb.get_vector_info(path)
+        # else:
+        #     raise TypeError('input_paths_list given to assert_gdal_paths_in_same_projection was not able to be interpretted on item ' + str(path) + ' from fuller list ' + str(input_paths_list))
+        srs = hb.get_gdal_srs_path(path)
+
+        show_debug = False
+        if show_debug:
+            print('\n')
+            print(path)
+            print(srs)
+            print(srs.GetAttrValue('PROJCS'))
+            print(srs.GetAttrValue('GEOGCS'))
+            print(srs.GetAttrValue('DATUM'))
+            print(srs.GetAttrValue('UNIT'))
+            print(srs.GetAttrValue('UNIT', 1)) # Overriding the defaul 0 gets the VALUE of the value
+            print(srs.IsSameGeogCS(first_srs))
+            print(srs.IsSame(first_srs))
+
+        if srs.IsSame(first_srs):
+            if return_result:
+                return True
+            else:
+                'we good'
+        else:
+            error_string = 'The path ' + str(path) + ' is not the same projection as the other paths in the list given to assert_gdal_paths_in_same_projection.'
+            if return_result:
+                # L.critical(error_string)
+                return False
+            raise NameError(error_string)
+
+
+def assert_gdal_paths_have_same_bb(input_paths_list, return_result=False):
+    if not isinstance(input_paths_list, list):
+        input_paths_list = [input_paths_list]
+    first_bb = hb.get_bounding_box(input_paths_list[0])
+    for path in input_paths_list[1:]:
+        bb = hb.get_bounding_box(path)
+        if bb == first_bb:
+            if return_result:
+                return True
+            else:
+                'we good'
+        else:
+            error_string = 'Two paths do not have the same bounding boxes, as found by assert_gdal_paths_have_same_bb. \n    ' + input_paths_list[0] + ': ' + str(first_bb) + '\n    ' + path + ': ' + str(bb)
+            if return_result:
+                L.critical(error_string)
+                return False
+            raise NameError(error_string)
 
 
 def assert_datasets_in_same_projection(dataset_uri_list):
@@ -117,7 +214,7 @@ def assert_datasets_in_same_projection(dataset_uri_list):
     dataset_projections = []
 
     unprojected_datasets = set()
-
+    print('dataset_list', dataset_list)
     for dataset in dataset_list:
         projection_as_str = dataset.GetProjection()
         dataset_sr = osr.SpatialReference()
@@ -146,33 +243,71 @@ def assert_datasets_in_same_projection(dataset_uri_list):
     dataset_list = None
     return True
 
-def get_bounding_box(dataset_uri, return_in_basemap_order=False):
-    """Get bounding box where coordinates are in projected units.
+
+def get_unaligned_raster_paths(input_paths_list, match_raster_path=None):
+    """
+    Return True if all rasters in input_paths_list are perfectly compatible. This is tested by checking if all paths in list
+    match match_raster (if provided) or the first raster in the list if not provided. If any dont match, returns a list
+    of with paths that dont match
+    :param input_paths_list:
+    :param match_raster:
+    :return:
+    """
+
+    return_list = []
+    starting_element = 0
+    if match_raster_path is None:
+        match_raster_path = input_paths_list[0]
+        starting_element = 1
+    for path in input_paths_list[starting_element:]:
+        a = hb.assert_gdal_paths_have_same_geotransform([path, match_raster_path], return_result=True)
+        b = hb.assert_gdal_paths_in_same_projection([path, match_raster_path], return_result=True)
+        c = hb.assert_gdal_paths_have_same_bb([path, match_raster_path], return_result=True)
+
+        overall_result = all([a, b, c])
+        if not overall_result:
+            return_list.append(path)
+
+    return return_list
+
+
+def get_bounding_box(input_path, return_in_basemap_order=False, return_in_old_order=False):
+    """
+
+    WARNING, This changed notation from UL LR to xmin ymin xmax ymax and may not have back\ward compatibility.
+     from the bounding box reported by pygeoprocessing insofar as it is UL, LR (but PGP is LL, UR)
+    Get bounding box where coordinates are in projected units.
 
     Args:
-        dataset_uri (string): a uri to a GDAL dataset
+        input_path (string): a uri to a GDAL dataset
 
     Returns:
         bounding_box (list):
             [upper_left_x, upper_left_y, lower_right_x, lower_right_y] in
             projected coordinates
     """
-    dataset = gdal.Open(dataset_uri)
-
-    geotransform = dataset.GetGeoTransform()
-    n_cols = dataset.RasterXSize
-    n_rows = dataset.RasterYSize
-
-    bounding_box = [geotransform[0],
-                    geotransform[3],
-                    geotransform[0] + n_cols * geotransform[1],
-                    geotransform[3] + n_rows * geotransform[5]]
-
-    # Close and cleanup dataset
-    gdal.Dataset.__swig_destroy__(dataset)
-    dataset = None
+    if os.path.splitext(input_path)[1] == '.shp':
+        bounding_box = hb.get_vector_info_hb(input_path)['bounding_box']
+    else:
+        bounding_box = hb.get_raster_info(input_path)['bounding_box']
 
     if return_in_basemap_order:
+        dataset = gdal.Open(input_path)
+
+        geotransform = dataset.GetGeoTransform()
+        n_cols = dataset.RasterXSize
+        n_rows = dataset.RasterYSize
+
+        bounding_box = [geotransform[0],
+                        geotransform[3],
+                        geotransform[0] + n_cols * geotransform[1],
+                        geotransform[3] + n_rows * geotransform[5]]
+
+        # Close and cleanup dataset
+        gdal.Dataset.__swig_destroy__(dataset)
+        dataset = None
+
+
         bounding_box = [
             bounding_box[3], # llcrnrlat
             bounding_box[1], # urcrnrlat
@@ -181,13 +316,28 @@ def get_bounding_box(dataset_uri, return_in_basemap_order=False):
         ]
         return bounding_box
 
-    new_bounding_box = hb.get_raster_info(dataset_uri)['bounding_box']
-    if bounding_box != new_bounding_box:
-        pass
-        # L.warn('potential bounding box mismatch', new_bounding_box, bounding_box)
+    if return_in_old_order:
+        dataset = gdal.Open(input_path)
+
+        geotransform = dataset.GetGeoTransform()
+        n_cols = dataset.RasterXSize
+        n_rows = dataset.RasterYSize
+
+        bounding_box = [geotransform[0],
+                        geotransform[3],
+                        geotransform[0] + n_cols * geotransform[1],
+                        geotransform[3] + n_rows * geotransform[5]]
+
+        # Close and cleanup dataset
+        gdal.Dataset.__swig_destroy__(dataset)
+        dataset = None
+
+
+        return bounding_box
+
     return bounding_box
 
-def get_datasource_bounding_box(datasource_uri):
+def get_datasource_bounding_box(datasource_uri, return_in_old_order=False):
     """
     Returns a bounding box where coordinates are in projected units.
 
@@ -200,7 +350,7 @@ def get_datasource_bounding_box(datasource_uri):
             projected coordinates
 
     """
-
+    print('DEPRECATED for get_bounding_box()')
     datasource = ogr.Open(datasource_uri)
     layer = datasource.GetLayer(0)
     extent = layer.GetExtent()
@@ -209,24 +359,189 @@ def get_datasource_bounding_box(datasource_uri):
                     extent[3],
                     extent[1],
                     extent[2]]
+    print('bb1', bounding_box)
+    if return_in_old_order:
+        bounding_box = hb.get_vector_info_hb(datasource_uri)
+        print('bb2', bounding_box)
+        return bounding_box
+
+
     return bounding_box
 
-def resample(input_path, output_path, resample_factor, resample_method='bilinear'):
 
-    target_pixel_size = hb.get_cell_size_from_uri(input_path) * resample_factor
-    target_pixel_size_tuple = (target_pixel_size, -target_pixel_size)
-    target_bb = hb.get_raster_info(input_path)['bounding_box']
-    target_sr_wkt = hb.get_raster_info(input_path)['projection']
 
-    hb.warp_raster(input_path, target_pixel_size_tuple, output_path,
-                   resample_method, target_bb=target_bb, target_sr_wkt=target_sr_wkt,
-                   gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS)
+if 0:
+    # STEP 1, identify how resample_to_match is different than resample_to_match_ensuring_fit and
+    # if minimal, make into 1 eqn with an option
+    # STEP 2, veryfiy/improve warp_raster_hb make it supported and clarify how it's different than warp_raster pgp
+    # STEP 3: make resample_list_to_match
+    # STEP 4: clarify if warb_raster_hb is sufficiently different than resample_to_match
+
+    hb.resample_list_to_match_ensuring_fit()
+    hb.resample_to_match()
+    hb.warp_raster_hb
+    gdal.Warp
+
+    hb.resample_to_match()
+    hb.warp_raster_hb
+    gdal.Warp
+
+    hb.resample_to_match_ensuring_fit()
+    hb.warp_raster_hb()
+    gdal.Warp
+
+    # DEPRECATED
+    hb.align_list_of_datasets_to_match()
+    hb.align_and_resize_raster_stack_ensuring_fit()
+    hb.warp_raster_HAZELBEAN_REPLACEMENT()
+    gdal.ReprojectImage
+
+    # DOESNT EXIST
+    hb.resample()  #
+
+
+def resample_to_match(input_path,
+                      match_path,
+                      output_path,
+                      resample_method='bilinear',
+                      output_data_type=None,
+                      src_ndv=None,
+                      ndv=None,
+                      compress=True,
+                      ensure_fits=False,
+                      gtiff_creation_options=hb.DEFAULT_GTIFF_CREATION_OPTIONS,
+                      calc_raster_stats=False,
+                      add_overviews=False,
+                      pixel_size_override=None,
+                      verbose=False,
+                      ):
+
+    if pixel_size_override is None:
+        target_pixel_size = (hb.get_cell_size_from_uri(match_path), -hb.get_cell_size_from_uri(match_path))
+    elif not isinstance(pixel_size_override, (tuple, list)):
+        target_pixel_size = (pixel_size_override, -pixel_size_override)
+
+    target_sr_wkt = hb.get_raster_info(match_path)['projection']
+
+    target_bb = hb.get_raster_info_hb(match_path)['bounding_box']
+
+    if output_data_type is None:
+        output_data_type = hb.get_datatype_from_uri(match_path)
+
+    if src_ndv is None:
+        src_ndv = hb.get_ndv_from_path(input_path)
+
+    if ndv is None:
+        dst_ndv = hb.get_ndv_from_path(match_path)
+    else:
+        if output_data_type < 5:
+            dst_ndv = 255
+        else:
+            dst_ndv = -9999.0
+
+    if ensure_fits:
+        # This addition to the core geoprocessing code was to fix the case where the alignment moved the target tif
+        # up and to the left, but in a way that then trunkated 1 row/col on the bottom right, causing wrong-shape
+        # raster_math errors.z
+        pass
+        # target_bounding_box = reduce(
+        #     functools.partial(hb.merge_bounding_boxes, mode=bounding_box_mode),
+        #     [info['bounding_box'] for info in
+        #      (raster_info_list + vector_info_list)])
+        #
+        # if original_bounding_box[2] > target_bounding_box[2]:
+        #     target_bounding_box[2] += target_pixel_size[0]
+        #
+        # if original_bounding_box[3] > target_bounding_box[3]:
+        #     target_bounding_box[3] -= target_pixel_size[1]
+
+        target_bb[2] += target_pixel_size[0]
+        target_bb[3] += target_pixel_size[1]
+    if compress is True:
+        gtiff_creation_options = (
+            'TILED=YES',
+            'BIGTIFF=YES',
+            'COMPRESS=DEFLATE',
+            'BLOCKXSIZE=256',
+            'BLOCKYSIZE=256',
+        )
+    else:
+        gtiff_creation_options = (
+            'TILED=YES',
+            'BIGTIFF=YES',
+            'BLOCKXSIZE=256',
+            'BLOCKYSIZE=256',
+        )
+
+    hb.warp_raster_hb(input_path, target_pixel_size, output_path,
+                      resample_method, target_bb=target_bb, base_sr_wkt=None, target_sr_wkt=target_sr_wkt,
+                      gtiff_creation_options=gtiff_creation_options,
+                      n_threads=None, vector_mask_options=None,
+                      output_data_type=output_data_type,
+                      src_ndv=src_ndv,
+                      dst_ndv=dst_ndv,
+                      calc_raster_stats=calc_raster_stats,
+                      add_overviews=add_overviews,
+    )
+
+
+def resample_in_memory(input_path, match_path, resamping_method):
+    # NYI flex. still uses paths
+    # input_flex = hb.parse_input_flex(input_flex)
+
+    input_ds = gdal.OpenEx(input_path)
+    # input_ds = gdal.OpenEx(input_flex.path)
+    match_ds = gdal.OpenEx(match_path)
+
+    # START HERE
+    input_raster_info = hb.get_raster_info_hb(input_path)
+    # input_raster_info = hb.get_raster_info_hb(input_flex.path)
+    match_raster_info = hb.get_raster_info_hb(match_path)
+
+    input_wkt = input_raster_info['projection']
+    match_wkt = match_raster_info['projection']
+
+    input_gt = input_raster_info['geotransform']
+    match_gt = match_raster_info['geotransform']
+
+    match_x_size = match_ds.RasterXSize
+    match_y_size = match_ds.RasterYSize
+
+    match_ulx = match_gt[0]
+    match_uly = match_gt[3]
+    match_lrx = match_gt[0] + match_gt[1] * match_x_size
+    match_lry = match_gt[3] + match_gt[5] * match_y_size
+
+    pixel_spacing = input_raster_info['pixel_size'][0]
+
+    # tx = osr.CoordinateTransformation(wgs84, osng)
+    # (ulx, uly, ulz) = tx.TransformPoint(geo_t[0], geo_t[3])
+    # (lrx, lry, lrz) = tx.TransformPoint(geo_t[0] + geo_t[1] * x_size, \
+    #                                     geo_t[3] + geo_t[5] * y_size)
+    #
+    # Get the Geotransform vector
+    mem_drv = gdal.GetDriverByName('MEM')
+
+    output_ds = mem_drv.Create('', match_x_size, match_y_size, 1, gdal.GDT_Float32)
+
+    # new_geo = (ulx, pixel_spacing, geo_t[2], uly, geo_t[4], -pixel_spacing)
+    output_ds.SetGeoTransform(match_gt)
+    output_ds.SetProjection(match_wkt)
+
+    # Perform the projection/resampling
+    gdal.ReprojectImage(input_ds, output_ds, input_wkt, match_wkt, hb.resampling_methods[resamping_method])
+    return output_ds
+
 
 
 def resize_and_resample_dataset_uri(
         original_dataset_uri, bounding_box, out_pixel_size, output_uri,
         resample_method, output_datatype=None):
-    print('resize_and_resample_dataset_uri is deprecated. use pygeoprocessing warp or hb.resample (Which is a wrapper).')
+
+
+    L.critical('DEPRECATED!!!'
+               ''
+               'resize_and_resample_dataset_uri is deprecated. use hb.resample_to_match (Which is a wrapper).')
     """
     A function to  a datsaet to larger or smaller pixel sizes
 
@@ -329,7 +644,7 @@ def resize_and_resample_dataset_uri(
                 # LOGGER.info(
                 #     "ReprojectImage %.1f%% complete %s, psz_message %s",
                 #     df_complete * 100, p_progress_arg[0], psz_message)
-                print("ReprojectImage for resize_and_resample_dataset_uri " + str(df_complete * 100) + " percent complete")
+                print ("ReprojectImage for resize_and_resample_dataset_uri " + str(df_complete * 100) + " percent complete")
                 reproject_callback.last_time = current_time
                 reproject_callback.total_time += current_time
         except AttributeError:
@@ -400,12 +715,12 @@ def resize_and_resample_dataset_uri_hb_old(
         int(np.round((bounding_box[3] - bounding_box[1]) / out_pixel_size)))
 
     if new_x_size == 0:
-        print(
+        print (
             "bounding_box is so small that x dimension rounds to 0; "
             "clamping to 1.")
         new_x_size = 1
     if new_y_size == 0:
-        print(
+        print (
             "bounding_box is so small that y dimension rounds to 0; "
             "clamping to 1.")
         new_y_size = 1
@@ -450,7 +765,7 @@ def resize_and_resample_dataset_uri_hb_old(
             current_time = time.time()
             if ((current_time - reproject_callback.last_time) > 5.0 or
                     (df_complete == 1.0 and reproject_callback.total_time >= 5.0)):
-                print(
+                print (
                     "ReprojectImage %.1f%% complete %s, psz_message %s",
                     df_complete * 100, p_progress_arg[0], psz_message)
                 reproject_callback.last_time = current_time
@@ -490,7 +805,7 @@ def force_geotiff_to_match_projection_ndv_and_datatype(input_path, match_path, o
         output_datatype = hb.get_datatype_from_uri(match_path)
 
     if not output_ndv:
-        output_ndv = hb.get_nodata_from_uri(match_path)
+        output_ndv = hb.get_ndv_from_path(match_path)
     match_wkt = hb.get_dataset_projection_wkt_uri(match_path)
     input_geotransform  = hb.get_geotransform_uri(input_path)
 
@@ -510,7 +825,7 @@ def force_geotiff_to_match_projection_ndv_and_datatype(input_path, match_path, o
 def force_global_angular_data_to_plate_carree(input_path, output_path):
 
     output_datatype = hb.get_datatype_from_uri(input_path)
-    output_ndv = hb.get_nodata_from_uri(input_path)
+    output_ndv = hb.get_ndv_from_path(input_path)
     match_wkt = hb.get_dataset_projection_wkt_uri(input_path)
     match_wkt = hb.get_wkt_from_epsg_code(32662)
 
@@ -538,7 +853,7 @@ def force_global_angular_data_to_plate_carree(input_path, output_path):
 def force_global_angular_data_to_equal_area_earth_grid(input_path, output_path):
 
     output_datatype = hb.get_datatype_from_uri(input_path)
-    output_ndv = hb.get_nodata_from_uri(input_path)
+    output_ndv = hb.get_ndv_from_path(input_path)
     match_wkt = hb.get_dataset_projection_wkt_uri(input_path)
     match_wkt = hb.get_wkt_from_epsg_code(6933)
 

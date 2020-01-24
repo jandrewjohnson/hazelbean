@@ -18,6 +18,7 @@ import scipy
 import scipy.ndimage # Scipy requires this. Can't just do e.g. scipy.ndimage.filters.gaussian_filter()
 import atexit
 import hazelbean as hb
+import matplotlib.gridspec as gridspec
 
 # Deprecated until pysal api updates.
 # try:
@@ -124,11 +125,13 @@ def show(input_flex, **kwargs):
 
 def show_array(input_array, **kwargs):
     """Temporarily deprecated for hb_show_array."""
-    try:
-        hb.full_show_array(input_array, **kwargs)
-    except:
-        hb.simple_show_array(input_array, **kwargs)
+    # try:
+    #     hb.full_show_array(input_array, **kwargs)
+    # except:
+    #     hb.simple_show_array(input_array, **kwargs)
 
+
+    hb.full_show_array(input_array, **kwargs)
 
 def simple_show_array(input_array, **kwargs):
     fig, ax = plt.subplots()
@@ -136,6 +139,251 @@ def simple_show_array(input_array, **kwargs):
     im = ax.imshow(input_array, cmap=cmap, interpolation='nearest')
     cbar = plt.colorbar(im, orientation='horizontal')
     hb.plot_at_exit(plt)
+
+def plot_array(input_array, output_path=None, title=None, cbar_label=None, cbar_font_size=9,
+               ndv=None, vmin=None, vmid=None, vmax=None, percent_clip=None,
+               color_scheme=None, plot_spines=False, plot_box=False,
+               num_cbar_ticks=3, tick_labels=None, switch_to_scientific_notation_threshold=100000,
+               fig_height=None, fig_width=None, dpi=200, display_plot=True, log_normalize=False, **kwargs):
+
+    # # Available color-schemes:
+    # available_color_schemes = ['bold_spectral', 'bold_spectral_white_left', 'spectral', 'spectral_white_center', 'prgn', 'white_to_black', 'spectral_cotnrast',
+    #                            'brbg', 'piyg', 'puor', 'rdbu', 'rdylbu', 'oranges', 'reds', 'purples', 'greys', 'greens', 'blues', 'bugn',
+    #                            'bupu', 'gnbu', 'orrd', 'pubu', 'show_state_boundaries', 'purd', 'rdpu', 'ylgn', 'ylgnbu', 'ylorbr', 'ylorrd', 'random']
+    #
+    # # Here are the builtin mpl cmaps.
+    # cmaps_list = [('Sequential', ['Blues', 'BuGn', 'BuPu', 'GnBu', 'Greens', 'Greys', 'Oranges', 'OrRd', 'PuBu', 'PuBuGn', 'PuRd', 'Purples', 'RdPu', 'Reds', 'YlGn', 'YlGnBu', 'YlOrBr', 'YlOrRd']),
+    #               ('Sequential (2)', ['afmhot', 'autumn', 'bone', 'cool', 'copper', 'gist_heat', 'gray', 'hot', 'pink', 'spring', 'summer', 'winter']),
+    #               ('Diverging', ['BrBG', 'bwr', 'coolwarm', 'PiYG', 'PRGn', 'PuOr', 'RdBu', 'RdGy', 'RdYlBu', 'RdYlGn', 'Spectral', 'seismic']),
+    #               ('Qualitative', ['Accent', 'Dark2', 'Paired', 'Pastel1', 'Pastel2', 'Set1', 'Set2', 'Set3']),
+
+    if title is None:
+        # Get name of variable passed to input_array
+        # NOT ADVISED TO MONKEY WITH
+        frame = inspect.currentframe()
+        frame = inspect.getouterframes(frame)[1]
+        string = inspect.getframeinfo(frame[0]).code_context[0].strip()
+        function_args = string[string.find('(') + 1:-1].split(',')
+        var_names = []
+        for i in function_args:
+            if i.find('=') != -1:
+                var_names.append(i.split('=')[1].strip())
+            else:
+                var_names.append(i)
+        var_name = var_names[0]
+        title = var_name
+
+    if output_path is None:
+        output_path =  hb.temp('.png', title)
+
+    if ndv is not None:
+        if vmin is None:
+            vmin = np.min(input_array[input_array != ndv])
+        if vmax is None:
+            vmax = np.max(input_array[input_array != ndv])
+        if vmid is None:
+            vmid = vmax - ((vmax - vmin) / 2.0)
+    else:
+        if vmin is None:
+            vmin = np.min(input_array)
+        if vmax is None:
+            vmax = np.max(input_array)
+        if vmid is None:
+            vmid = vmax - ((vmax - vmin) / 2.0)
+
+    # Altenatively to providing specific vmin, vmid, vmax, you can specify it as a percent. This also achieves the percent clip feature of arcgis.
+    # NOTE: Overrides behavior of setting vmin vmid or vmax
+    if percent_clip is not None:
+        vmin = np.percentile(input_array[input_array != ndv], 2)
+        vmax = np.percentile(input_array[input_array != ndv], 98)
+        # I chose not to make this one calculated from the data by default because many times it would but vmid right next to vmin
+        vmid = np.percentile(input_array[input_array != ndv], 50)
+
+        # Now check to see if the new vmid is too close to either extreme
+        safe_proportion = 0.33
+        if (vmin / vmid) < (vmax / vmid) * safe_proportion:
+            vmid = (vmax - vmin) * safe_proportion
+        elif (vmax / vmid) > (vmin / vmid) * (1 - safe_proportion):
+            vmid = (vmax - vmin) * (1 - safe_proportion)
+
+    elif type(percent_clip) is list and len(percent_clip) is 3:
+        # TODOO make this dynamic with tick marks.
+        if not kwargs.get('vmin'):
+            vmin = np.percentile(input_array[input_array != ndv], percent_clip[0])
+        if not kwargs.get('vmax'):
+            vmid = np.percentile(input_array[input_array != ndv], percent_clip[1])
+        if not kwargs.get('vmid'):
+            vmax = np.percentile(input_array[input_array != ndv], percent_clip[2])
+
+    else:
+        L.info('Unable to interpret vmin, vmid, vmax values.')
+
+    # If not given, choose color scheme based on data
+    if color_scheme is None:
+        if vmin < 0 and vmax > 0:
+            color_scheme = 'Spectral'
+            # if not kwargs.get('vmid'):
+            #     vmid = 0
+            if not kwargs.get('pinch'):
+                pinch = True
+        else:
+            color_scheme = 'Viridis'
+
+    cmap = matplotlib.cm.get_cmap(color_scheme)
+    if ndv is not None:
+        input_array = np.where(input_array != ndv, input_array, np.nan)
+
+    if num_cbar_ticks == 2:
+        if not tick_labels:
+            cbar_tick_labels = [vmin, vmax]
+        else:
+            cbar_tick_labels = tick_labels
+        cbar_tick_locations = [vmin, vmax]
+    elif num_cbar_ticks == 3:
+        if not tick_labels:
+            cbar_tick_labels = [vmin, vmid, vmax]
+        else:
+            cbar_tick_labels = tick_labels
+        cbar_tick_locations = [vmin, vmid, vmax]
+    elif num_cbar_ticks == 5:
+        if not tick_labels:
+            cbar_tick_labels = [vmin, vmin + (vmid - vmin) / 2, vmid, vmid + (vmax - vmid) / 2, vmax]
+        else:
+            cbar_tick_labels = tick_labels
+        cbar_tick_locations = [vmin, vmin + (vmid - vmin) / 2, vmid, vmid + (vmax - vmid) / 2, vmax]
+    else:
+
+        cbar_tick_labels = []
+        cbar_tick_locations = []
+        for i in range(num_cbar_ticks):
+            # tick_value = hb.round_significant_n(vmin + (abs(vmin) + abs(vmax)) * (float(i) / (float(num_cbar_ticks) - 1.)))
+            tick_value = hb.round_significant_n((vmin + abs(vmin) + abs(vmax) * float(i)) / (float(num_cbar_ticks) - 1.), 1)
+            if not tick_labels:
+                cbar_tick_locations.append(tick_value)
+            else:
+                cbar_tick_labels = tick_labels
+            cbar_tick_labels.append(tick_value)
+
+    # Round tick values to be reasonable size
+    if not tick_labels:
+        for i, tick_value in enumerate(cbar_tick_labels):
+
+            tick_value_string = str(tick_value)
+
+            decimals_present = len(tick_value_string.split('.'))
+            if -0.01 < tick_value < 0.01:
+                if decimals_present > 3:
+                    decimals_to_show = 3
+                else:
+                    decimals_to_show = decimals_present
+            elif abs(tick_value) < 1:
+                if decimals_present > 2:
+                    decimals_to_show = 2
+                else:
+                    decimals_to_show = decimals_present
+            elif abs(tick_value) < 10:
+                if decimals_present > 0:
+                    decimals_to_show = 1
+            elif abs(tick_value) < 1000000:
+                if decimals_present > 0:
+                    decimals_to_show = 1
+
+            else:
+                decimals_to_show = 0
+            tick_value_rounded = round(float(tick_value), decimals_to_show)
+            if tick_value_rounded > 10000000:
+                tick_value_rounded = "{:.2e}".format(tick_value_rounded)
+
+            new_tick_value_rounded = hb.round_significant_n(tick_value, 2)
+            if abs(new_tick_value_rounded) > abs(switch_to_scientific_notation_threshold):
+                new_tick_value_rounded = "{:.2e}".format(new_tick_value_rounded)
+            cbar_tick_labels[i] = str(new_tick_value_rounded)
+    #
+    # Create fig with a 3,2 gridspec
+    if fig_height is not None:
+        fig = plt.figure(figsize=(fig_width, fig_height))
+    else:
+        fig = plt.figure()
+
+    # NOTE Cbars are placed into their own ax, greated as an inner 1,3 gridspec to allow for edge cropping.
+    outer_grid = gridspec.GridSpec(2, 1, height_ratios=[1, .2], wspace=0.0, hspace=0.0)
+
+    # fig = plt.figure(figsize=(11, 11))
+    im_ax = plt.subplot(outer_grid[0])
+
+    im_ax.spines['top'].set_visible(False)
+    im_ax.spines['right'].set_visible(False)
+    im_ax.spines['bottom'].set_visible(False)
+    im_ax.spines['left'].set_visible(False)
+    im_ax.get_xaxis().set_visible(False)
+    im_ax.get_yaxis().set_visible(False)
+    # cbar_ax = plt.subplot(inner_grid[0, 1])
+
+    inner_grid = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outer_grid[1], wspace=0.0, hspace=0.0, width_ratios=[1, 5, 1])
+
+    cbar_ax = plt.Subplot(fig, inner_grid[1])
+
+    import matplotlib as mpl
+
+    # im = im_ax.imshow(input_array, cmap=cmap, interpolation='nearest', vmin=vmin, vmax=vmax)
+    cmap = 'Spectral'
+
+    if log_normalize:
+        im = im_ax.imshow(input_array, cmap=cmap, norm=mpl.colors.SymLogNorm(linthresh=0.03, linscale=0.03), interpolation='nearest', vmin=vmin, vmax=vmax)
+    else:
+        im = im_ax.imshow(input_array, cmap=cmap, interpolation='nearest', vmin=vmin, vmax=vmax)
+    im.set_clim(vmin, vmax)
+
+
+    #
+    # cbar_ax.spines['top'].set_visible(False)
+    # cbar_ax.spines['right'].set_visible(False)
+    # cbar_ax.spines['bottom'].set_visible(False)
+    # cbar_ax.spines['left'].set_visible(False)
+    # cbar_ax.get_xaxis().set_visible(False)
+    # cbar_ax.get_yaxis().set_visible(False)
+
+    # if plot_spines is False:
+    #     for ax in [im_ax, cbar_ax]:
+    #         ax.spines['top'].set_visible(False)
+    #         ax.spines['right'].set_visible(False)
+    #         ax.spines['bottom'].set_visible(False)
+    #         ax.spines['left'].set_visible(False)
+    #
+    # if plot_box is False:
+    #     im_ax.get_xaxis().set_visible(False)
+    #     im_ax.get_yaxis().set_visible(False)
+    #
+    # cbar = plt.colorbar(im, orientation='horizontal', ticks=cbar_tick_locations, aspect=33, shrink=0.7)
+    cbar = fig.colorbar(im, ax=cbar_ax, orientation='horizontal')
+    # cbar.ax.set_xticklabels(cbar_tick_labels, fontsize=cbar_font_size)
+    if cbar_label is not None:
+        cbar.set_label(cbar_label, size=cbar_font_size)
+
+
+
+    if title:
+        # fig.suptitle(title)
+        im_ax.set_title(title)
+
+    plt.tight_layout()  # NOTE This can only be callled after a plt creation method.
+
+    output_padding_inches = 0.001
+    if output_path:
+        try:
+            plt.savefig(output_path, dpi=dpi, alpha=True)
+            # plt.savefig(output_path, dpi=dpi, alpha=True, bbox_inches='tight', pad_inches=output_padding_inches)
+        except:
+            raise Exception('Failed to savefig at ' + str(output_path))
+
+    # # force_display = kwargs.get('force_display', None)
+    if display_plot:
+        try:
+            hb.plot_at_exit(plt)
+        except:
+            raise Exception('Failed to plot in hazelbean')
+
+    plt.close()
 
 
 def full_show_array(input_array, **kwargs):
@@ -229,7 +477,7 @@ def full_show_array(input_array, **kwargs):
     switch_to_scientific_notation_threshold = 100000
 
     # Available color-schemes:
-    available_color_schemes = ['bold_spectral', 'bold_spectral_white_left', 'spectral', 'spectral_white_center', 'prgn', 'white_to_black', 'spectral_contrast',
+    available_color_schemes = ['bold_spectral', 'bold_spectral_white_left', 'spectral', 'spectral_white_center', 'prgn', 'white_to_black', 'spectral_cotnrast',
                                'brbg', 'piyg', 'puor', 'rdbu', 'rdylbu', 'oranges', 'reds', 'purples', 'greys', 'greens', 'blues', 'bugn',
                                'bupu', 'gnbu', 'orrd', 'pubu', 'show_state_boundaries', 'purd', 'rdpu', 'ylgn', 'ylgnbu', 'ylorbr', 'ylorrd', 'random']
 
@@ -407,9 +655,11 @@ def full_show_array(input_array, **kwargs):
     cbar_kwargs['color_scheme'] = color_scheme
     cbar_kwargs['reverse_colorbar'] = reverse_colorbar
 
-    if color_scheme.lower() in color_scheme_data:
+    if color_scheme in color_scheme_data:
+        print('INSIDE')
         cmap = generate_custom_colorbar(m, **cbar_kwargs)
     else:
+        print('OUTSIDE')
         cmap = matplotlib.cm.get_cmap(color_scheme)
 
     # Basemap plots np.nan as white by default, can be changed by set_bad.
@@ -613,7 +863,7 @@ def full_show_array(input_array, **kwargs):
     else:
         pass
 
-    plt.close()
+    # plt.close()
 
     return plt, cbar, fig, ax
 
@@ -647,7 +897,7 @@ def generate_custom_colorbar(input_array, **kwargs):
     if vmax is None:
         vmax = np.max(input_array)
 
-    color_scheme = color_scheme.lower()
+    color_scheme = color_scheme
     rgb_string_to_use = color_scheme_data[color_scheme]
 
     if reverse_colorbar is True:

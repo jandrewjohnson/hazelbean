@@ -6,9 +6,16 @@ import hazelbean as hb
 
 L = hb.get_logger('arrayframe_functions', logging_level='warning') # hb.arrayframe.L.setLevel(logging.DEBUG)
 
-def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None, ndv=None, gtiff_creation_options=None, compress=False
-    """In HB, a flex input is one of [string that points to a file, an array frame, or a suitabily formatted list of the above"""
+def raster_calculator_af_flex(input_, op, output_path, **kwargs): #KWARGS: datatype=None, ndv=None, gtiff_creation_options=None, compress=False, add_overviews=False
+    """KWARGS:
+    datatype=None,
+    ndv=None,
+    gtiff_creation_options=None,
+    compress=False,
+    add_overviews=False
 
+    In HB, a flex input is one of [string that points to a file, an array frame, or a suitabily formatted list of the above"""
+    print('input_', input_)
     # If input is a string, put it into a list
     if isinstance(input_, str):
         input_ = [input_]
@@ -17,6 +24,7 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
 
     final_input = [''] * len(input_)
     for c, i in enumerate(input_):
+        print('c,i', c, i)
         if isinstance(i, hb.ArrayFrame):
             final_input[c] = i.path
         else:
@@ -29,27 +37,29 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
     elif isinstance(input_, list):
         input_size = len(input_)
     else:
-        raise NameError('input_ given to raster_calculator_flex() not understood. Give a path or list of paths.')
+        raise NameError('input_ given to raster_calculator_af_flex() not understood. Give a path or list of paths.')
 
-    # Check that files exist.
-    for i in input_:
-        if not os.path.exists(i):
-            raise FileNotFoundError(str(input_) + ' not found by raster_calculator_flex()')
+    # # Check that files exist.
+    # for i in input_:
+    #     if not os.path.exists(i):
+    #         raise FileNotFoundError(str(input_) + ' not found by raster_calculator_af_flex()')
 
      # Verify datatypes
     datatype = kwargs.get('datatype', None)
     if not datatype:
-        datatypes = [hb.get_datatype_from_uri(i) for i in input_]
+        print('input_', input_)
+        datatypes = [hb.get_datatype_from_uri(i) for i in input_ if type(i) is not float]
+        print('datatypes', datatypes)
         if len(set(datatypes)) > 1:
-            L.info('Rasters given to raster_calculator_flex() were not all of the same type. Defaulting to using first input datatype.')
+            L.info('Rasters given to raster_calculator_af_flex() were not all of the same type. Defaulting to using first input datatype.')
         datatype = datatypes[0]
 
     # Check NDVs.
     ndv = kwargs.get('ndv', None)
     if not ndv:
-        ndvs = [hb.get_nodata_from_uri(i) for i in input_]
+        ndvs = [hb.get_ndv_from_path(i) for i in input_ if type(i) is not float]
         if len(set(ndvs)) > 1:
-            L.info('NDVs used in rasters given to raster_calculator_flex() were not all the same. Defaulting to using first value.')
+            L.info('NDVs used in rasters given to raster_calculator_af_flex() were not all the same. Defaulting to using first value.')
         ndv = ndvs[0]
 
     gtiff_creation_options = kwargs.get('gtiff_creation_options', None)
@@ -58,7 +68,7 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
 
     compress = kwargs.get('compress', None)
     if compress:
-        gtiff_creation_options.append('COMPRESS=lzw')
+        gtiff_creation_options.append('COMPRESS=deflate')
 
     # Build tuples to match the required format of raster_calculator.
     if input_size == 1:
@@ -69,15 +79,25 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
     else:
         if isinstance(input_[0], str):
             input_tuples_list = [(i, 1) for i in input_]
+
         else:
             input_tuples_list = [(i.path, 1) for i in input_]
 
-    # Check that the op matches the number of rasters.
-    if len(inspect.signature(op).parameters) != input_size:
-        raise NameError('op given to raster_calculator_flex() did not have the same number of parameters as the number of rasters given.')
+    for c, i in enumerate(input_tuples_list):
+        if type(i[0]) is float:
+            input_tuples_list[c] = (i[0], 'raw')
 
-    hb.raster_calculator(input_tuples_list, op, output_path,
+
+    # # Check that the op matches the number of rasters.
+    # if len(inspect.signature(op).parameters) != input_size:
+    #     raise NameError('op given to raster_calculator_af_flex() did not have the same number of parameters as the number of rasters given.')
+
+    print('input_tuples_list', input_tuples_list)
+    hb.raster_calculator_hb(input_tuples_list, op, output_path,
                          datatype, ndv, gtiff_creation_options=gtiff_creation_options)
+
+    if kwargs.get('add_overviews'):
+        hb.add_overviews_to_path(output_path)
 
     output_af = hb.ArrayFrame(output_path)
     return output_af
@@ -85,24 +105,24 @@ def raster_calculator_flex(input_, op, output_path, **kwargs): #, datatype=None,
 
 def apply_op(op, output_path):
     input_ = 0
-    raster_calculator_flex(input_, op, output_path)
+    raster_calculator_af_flex(input_, op, output_path)
 
 def add(a_flex, b_flex, output_path):
     def op(a, b):
         return a + b
-    hb.raster_calculator_flex([a_flex, b_flex], op, output_path)
+    hb.raster_calculator_af_flex([a_flex, b_flex], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def add_with_valid_mask(a_path, b_path, output_path, valid_mask_path, ndv):
     def op(a, b, valid_mask):
         return np.where(valid_mask==1, a + b, ndv)
-    hb.raster_calculator_flex([a_path, b_path, valid_mask_path], op, output_path, ndv=ndv)
+    hb.raster_calculator_af_flex([a_path, b_path, valid_mask_path], op, output_path, ndv=ndv)
     return hb.ArrayFrame(output_path)
 
 def add_smart(a, b, a_valid_mask, b_valid_mask, output_ndv, output_path):
     def op(a, b, a_valid_mask, b_valid_mask, output_ndv):
         return np.where((a_valid_mask==1 & b_valid_mask==1), a + b, output_ndv)
-    hb.raster_calculator_flex([a, b, a.valid_mask, b.valid_mask], op, output_path, ndv=output_ndv)
+    hb.raster_calculator_af_flex([a, b, a.valid_mask, b.valid_mask], op, output_path, ndv=output_ndv)
     return hb.ArrayFrame(output_path)
 
 
@@ -110,38 +130,46 @@ def add_smart(a, b, a_valid_mask, b_valid_mask, output_ndv, output_path):
 def subtract(a_path, b_path, output_path):
     def op(a, b):
         return a - b
-    hb.raster_calculator_flex([a_path, b_path], op, output_path)
+    hb.raster_calculator_af_flex([a_path, b_path], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def multiply(a_path, b_path, output_path):
     def op(a, b):
         return a * b
-    hb.raster_calculator_flex([a_path, b_path], op, output_path)
+    hb.raster_calculator_af_flex([a_path, b_path], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def divide(a_path, b_path, output_path):
     def op(a, b):
         return a / b
-    hb.raster_calculator_flex([a_path, b_path], op, output_path)
+    hb.raster_calculator_af_flex([a_path, b_path], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def greater_than(a_path, b_path, output_path):
     def op(a, b):
         return np.where(a > b, 1, 0)
-    hb.raster_calculator_flex([a_path, b_path], op, output_path)
+    hb.raster_calculator_af_flex([a_path, b_path], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def a_greater_than_zero_b_equal_zero(a_path, b_path, output_path):
     def op(a, b):
         return np.where((a > 0) & (b==0), 1, 0)
-    hb.raster_calculator_flex([a_path, b_path], op, output_path)
+    hb.raster_calculator_af_flex([a_path, b_path], op, output_path)
     return hb.ArrayFrame(output_path)
 
 def proportion_change(after, before, output_path):
     def op(after, before):
         return (after - before) / before
 
-    hb.raster_calculator_flex([after, before], op, output_path)
+    hb.raster_calculator_af_flex([after, before], op, output_path)
+    return hb.ArrayFrame(output_path)
+
+
+def af_where_lt_value_set_to(a, value, set_to, output_path):
+    def op(a):
+        return np.where(a < value, set_to, a)
+
+    hb.raster_calculator_af_flex([a], op, output_path)
     return hb.ArrayFrame(output_path)
 
 

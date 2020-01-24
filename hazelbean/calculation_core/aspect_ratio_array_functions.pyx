@@ -24,6 +24,18 @@ import math, time
 # ctypedef np.float32_t DTYPEFLOAT32_t
 # ctypedef np.float64_t DTYPEFLOAT64_t
 
+DTYPEBYTE = np.byte
+DTYPEINT = np.int
+DTYPEINT64 = np.int64
+DTYPELONG = np.long
+DTYPEFLOAT32 = np.float32
+DTYPEFLOAT64 = np.float64
+ctypedef np.int_t DTYPEINT_t
+ctypedef np.int64_t DTYPEINT64_t
+ctypedef np.float32_t DTYPEFLOAT32_t
+ctypedef np.float64_t DTYPEFLOAT64_t
+
+
 def cython_calc_proportion_of_coarse_res_with_valid_fine_res(np.ndarray[np.float64_t, ndim=2] coarse_res_array,
                                                       np.ndarray[np.int64_t, ndim=2] fine_res_array,
     ):
@@ -63,37 +75,22 @@ def naive_upsample(np.ndarray[np.float64_t, ndim=2] coarse_res_array, long long 
 
     return output_array
 
-# def get_array_neighborhood_by_radius(np.ndarray[DTYPEFLOAT32_t, ndim=2] input_array, int point_x, int point_y, int radius, double fill_value = -255):
-    # cdef int num_input_rows = input_array.shape[0]
-    # cdef int num_input_cols = input_array.shape[1]
-    # cdef int diameter = 2 * radius + 1
-    # cdef int neighborhood_r, neighborhood_c, offset_r, offset_c
-    #
-    # cdef int offset_start = -1 * radius
-    #
-    # cdef np.ndarray[DTYPEINT_t, ndim=2] offset_r_array = np.empty([diameter, diameter], dtype=DTYPEINT)
-    # cdef np.ndarray[DTYPEINT_t, ndim=2] offset_c_array = np.empty([diameter, diameter], dtype=DTYPEINT)
-    # for offset_r in range(diameter):
-    #     for offset_c in range(diameter):
-    #         offset_r_array[offset_r, offset_c] = offset_start + offset_r
-    #         offset_c_array[offset_r, offset_c] = offset_start + offset_c
-    #
-    # cdef np.ndarray[DTYPEFLOAT32_t, ndim=2] output_array = np.zeros([diameter, diameter], dtype=DTYPEFLOAT32)
-    #
-    # for neighborhood_r in range(diameter):
-    #     for neighborhood_c in range(diameter):
-    #         if 0 <= point_y + (offset_r_array[neighborhood_r, neighborhood_c]) < num_input_rows and 0 <= point_x + (
-    #         offset_c_array[neighborhood_r, neighborhood_c]) < num_input_cols:
-    #             output_array[neighborhood_r, neighborhood_c] = input_array[
-    #                 point_y + offset_r_array[neighborhood_r, neighborhood_c], point_x + offset_c_array[neighborhood_r, neighborhood_c]]
-    #         else:
-    #             output_array[neighborhood_r, neighborhood_c] = fill_value
-    # return output_array
 
+def naive_upsample_byte(np.ndarray[np.int_t, ndim=2] coarse_res_array, long long upsample_factor):
+    """Return an array that makes a n by m array into a n * upsample_factor by m * upsample_factor with the n by m value put into each higher-res cell. """
+    cdef long long num_coarse_rows = coarse_res_array.shape[0]
+    cdef long long num_coarse_cols = coarse_res_array.shape[1]
+    cdef long long num_fine_rows = num_coarse_rows * upsample_factor
+    cdef long long num_fine_cols = num_coarse_cols * upsample_factor
+    cdef long long cr, cc
 
+    cdef np.ndarray[np.int_t, ndim=2] output_array = np.empty([num_fine_rows, num_fine_cols], dtype=np.int)
 
+    for cr in range(num_coarse_rows):
+        for cc in range(num_coarse_cols):
+            output_array[cr * upsample_factor: (cr + 1) * upsample_factor, cc * upsample_factor: (cc + 1) * upsample_factor] = coarse_res_array[cr, cc]
 
-
+    return output_array
 
 
 

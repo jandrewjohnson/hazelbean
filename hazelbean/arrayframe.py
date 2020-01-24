@@ -6,6 +6,7 @@ import hazelbean as hb
 
 L = hb.get_logger('arrayframe', logging_level='warning') # hb.arrayframe.L.setLevel(logging.DEBUG)
 
+
 class ArrayFrame(object):
 
     """DESIRED Functinality to add: starting with an array, save as AF."""
@@ -21,9 +22,14 @@ class ArrayFrame(object):
         self.ds = gdal.Open(path, gdal.GA_Update)
         self.band = self.ds.GetRasterBand(1)
         self.num_cols = self.ds.RasterXSize
+        self.n_cols = self.num_cols
         self.num_rows = self.ds.RasterYSize
+        self.n_rows = self.num_rows
         self.shape = (self.num_rows, self.num_cols)
         self.size = self.num_cols * self.num_rows
+
+
+
 
         self.ndv = self.band.GetNoDataValue()
 
@@ -33,8 +39,31 @@ class ArrayFrame(object):
         self.projection = self.ds.GetProjection()
         self.geotransform = self.ds.GetGeoTransform()
         self.cell_size = self.geotransform[1]
+        self.res = self.cell_size
+        self.resolution = self.cell_size
+        self.x_res = self.res
+        self.y_res = self.geotransform[5]
 
-        self.bounding_box = hb.get_raster_info(self.path)['bounding_box']
+        if self.x_res != abs(self.y_res):
+            L.warning('Warning, x_res not same as abs(y_res)')
+
+        self.raster_info = hb.get_raster_info(self.path)
+
+        self.old_bounding_box = hb.get_bounding_box(self.path, return_in_old_order=True)
+        self.bounding_box = self.raster_info['bounding_box'] # projected coordinates as [minx, miny, maxx, maxy]
+        self.bb = self.bounding_box
+
+        self.left_lat = self.bb[0]
+        self.bottom_lon = self.bb[1]
+        self.right_lat = self.bb[2]
+        self.top_lon = self.bb[3]
+
+        self.lat_size = self.left_lat - self.right_lat
+        self.lon_size = self.top_lon - self.bottom_lon
+
+        # Note that by definition of being an Arrayframe (rather than a block of one), this will always have 0 for first two entries and the second two will (should
+        # be equivilent to n_rows, n_cols
+        self.cr_widthheight = hb.bb_path_to_cr_size(self.path, self.bb)
 
         # self.info = gdal.Info(self.ds, format = 'json')
         self.info_as_string = gdal.Info(self.ds)
@@ -159,6 +188,7 @@ class ArrayFrame(object):
         self.valid_mask_set = True
         L.info('Setting valid mask. ' + str(self.num_valid) + ' valid.')
 
+    # TODOO Setting these via setters got confusing and may have been overboard.
     @property
     def ndv_mask(self):
         if self._ndv_mask is None:
@@ -255,29 +285,36 @@ class ArrayFrame(object):
         gdal.Dataset.__swig_destroy__(self.ds)
         self.ds = None
 
+    # TODOO consider removing. Overboard?
     def __add__(self, after):
         def op(left, right):
             return left + right
         output_path = hb.temp(filename_start='add', remove_at_exit=True)
-        return hb.raster_calculator_flex([self.path, after.path], op, output_path)
+        return hb.raster_calculator_af_flex([self.path, after.path], op, output_path)
 
     def __sub__(self, after):
         def op(left, right):
             return left - right
         output_path = hb.temp(filename_start='sub', remove_at_exit=True)
-        return hb.raster_calculator_flex([self.path, after.path], op, output_path)
+        return hb.raster_calculator_af_flex([self.path, after.path], op, output_path)
 
     def __mul__(self, after):
         def op(left, right):
             return left + right
         output_path = hb.temp(filename_start='mul', remove_at_exit=True)
-        return hb.raster_calculator_flex([self.path, after.path], op, output_path)
+        return hb.raster_calculator_af_flex([self.path, after.path], op, output_path)
 
     def __truediv__(self, after):
         def op(left, right):
             return left + right
         output_path = hb.temp(filename_start='div', remove_at_exit=False)
-        return hb.raster_calculator_flex([self.path, after.path], op, output_path)
+        return hb.raster_calculator_af_flex([self.path, after.path], op, output_path)
+
+
+class GlobalPyramidFrame(ArrayFrame):
+    def __init__(self, path, **kwargs):
+        hb.ArrayFrame.__init__(self, path, **kwargs)
+        hb.make_path_global_pyramid(path)
 
 
 def create_af_from_array(input_array, af_path, match_af, compress=False):

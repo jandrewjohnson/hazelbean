@@ -4,11 +4,6 @@ import logging
 import xlrd
 import numpy as np
 import pandas as pd
-
-# from pprint import pprint as pp
-# import nose
-import markdown
-# import yaml
 import csv
 
 import hazelbean as hb
@@ -240,6 +235,9 @@ def file_to_python_object(file_uri, declare_type=None, verbose=False, return_all
         return data, metadata
     else:
         return data
+def save_string_as_file(input_string, file_path):
+    with open(file_path, 'w') as file:
+        file.write(input_string)
 
 def determine_data_type_and_dimensions_from_uri(file_uri):
     """

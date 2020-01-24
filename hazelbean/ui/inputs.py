@@ -1567,6 +1567,35 @@ class Text(GriddedInput):
         GriddedInput.clear(self)
 
 
+
+class TextWithDefault(Text):
+
+    def __init__(self, label, helptext=None, interactive=True, args_key=None, hideable=False, validator=None, default_text=None):
+        Text.__init__(self, label, helptext, interactive, args_key, hideable, validator)
+
+        self.default_text = default_text
+        self.use_default_path_button = QtWidgets.QPushButton('Use default value.')
+        self.use_default_path_button.clicked.connect(self._handle_use_default_text_button_selection)
+        # self.widgets.append(self.help_button)
+        # self.widgets.append(self.use_default_path_button)
+        self.widgets[4] = self.help_button
+        self.widgets.append(self.use_default_path_button)
+
+    def _handle_use_default_text_button_selection(self, value):
+        """Handle the case when the user presses 'cancel' in the file dialog.
+
+        Parameters:
+            value (string): The path selected.  This path will be ``''`` if the
+                dialog was cancelled.
+
+        Returns:
+            ``None``
+        """
+        if self.default_text != '':
+            self.textfield.setText(self.default_text)
+            # _text_changed(self.default_text)
+
+
 class _Path(Text):
     """Shared code for filepath-based UI inputs."""
 
@@ -1734,6 +1763,19 @@ class _Path(Text):
         if value != '':
             self.textfield.setText(value)
 
+    def _handle_use_default_path_button_selection(self, value):
+        """Handle the case when the user presses 'cancel' in the file dialog.
+
+        Parameters:
+            value (string): The path selected.  This path will be ``''`` if the
+                dialog was cancelled.
+
+        Returns:
+            ``None``
+        """
+        if self.default_path != '':
+            self.textfield.setText(self.default_path)
+
 
 class Folder(_Path):
     """An InVESTModelInput for selecting a folder."""
@@ -1805,6 +1847,7 @@ class File(_Path):
         _Path.__init__(self, label, helptext, interactive, args_key,
                        hideable, validator=validator)
         self.path_select_button = FileButton('Select file')
+
         self.path_select_button.path_selected.connect(
             self._handle_file_button_selection)
 
@@ -1812,8 +1855,23 @@ class File(_Path):
         # the help button.
         self.widgets[3] = self.path_select_button
 
+
         if self.hideable:
             self._hideability_changed(False)
+
+class FileWithDefault(File):
+
+    def __init__(self, label, helptext=None, interactive=True, args_key=None, hideable=False, validator=None, default_path=None):
+        File.__init__(self, label, helptext, interactive, args_key, hideable, validator)
+
+        self.default_path = default_path
+
+        self.use_default_path_button = QtWidgets.QPushButton('Use default file.')
+        self.use_default_path_button.clicked.connect(self._handle_use_default_path_button_selection)
+        # self.widgets.append(self.help_button)
+        # self.widgets.append(self.use_default_path_button)
+        self.widgets[4] = self.help_button
+        self.widgets.append(self.use_default_path_button)
 
 class ConditionalFile(_Path):
     """An InVESTModelInput for selecting a single file."""

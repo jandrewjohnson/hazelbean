@@ -2,7 +2,7 @@ import os, sys, warnings
 
 import hazelbean as hb
 # hazelbean_working_directory = '../hazelbean'
-hazelbean_working_directory = hb.config.HAZELBEAN_WORKING_DIRECTORY
+hazelbean_working_directory = hb.globals.HAZELBEAN_WORKING_DIRECTORY
 """
 TO COMPILE on windows 10, need to install proper Visual Studio tools: See::
 https://stackoverflow.com/questions/29846087/microsoft-visual-c-14-0-is-required-unable-to-find-vcvarsall-bat
@@ -20,21 +20,19 @@ if recompile_cython == True and hb.CONFIGURED_FOR_CYTHON_COMPILATION:
         if sys.version_info[0] == 2:
             python_2_exe_dir = 'C:\\Anaconda2'
             os.chdir(python_2_exe_dir)
-            print('Checking if need to compile cython files for Python 2.')
+
             for python_file_uri in CYTHON_FILES:
                 python_file_uri = os.path.splitext(python_file_uri)[0] + '_27' + os.path.splitext(python_file_uri)[1]
                 cython_command = "python.exe " + os.path.join(hazelbean_working_directory, python_file_uri) + " --quiet build_ext -i clean"  #
                 # cython_command = "python " + python_file_uri + " --verbose build_ext -i clean"  #
-                print('Running cython command\n    ' + cython_command)
+
                 returned = os.system(cython_command)
                 if returned:
                     warnings.warn('Cythonization failed.')
 
         else:
-            # print('CYTHON_FILES', CYTHON_FILES)
             for python_file_uri in CYTHON_FILES:
                 cython_command = "python " + python_file_uri + " --quiet build_ext -i clean"  #
-                # print('cython_command', cython_command)
                 # cython_command = "python " + python_file_uri + " --verbose build_ext -i clean"  #
                 returned = os.system(cython_command)
                 if returned:
