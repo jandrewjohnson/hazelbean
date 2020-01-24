@@ -1,0 +1,10 @@
+anytree
+geopandas
+pygeoprocessing
+natcap.invest
+rtree
+scipy
+fiona
+netCDF4
+statsmodels
+sklearn
